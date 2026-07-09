@@ -1,0 +1,38 @@
+{
+  "name": "Availability",
+  "type": "object",
+  "properties": {
+    "teamMemberId": {
+      "type": "string"
+    },
+    "dayOfWeek": {
+      "type": "number",
+      "description": "0=Sunday, 6=Saturday"
+    },
+    "availabilityType": {
+      "type": "string",
+      "enum": [
+        "available",
+        "unavailable",
+        "preferred"
+      ],
+      "default": "available"
+    },
+    "startTime": {
+      "type": "string",
+      "description": "HH:MM format"
+    },
+    "endTime": {
+      "type": "string",
+      "description": "HH:MM format"
+    },
+    "note": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "teamMemberId",
+    "dayOfWeek",
+    "availabilityType"
+  ]
+}

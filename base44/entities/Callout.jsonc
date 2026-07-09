@@ -1,0 +1,53 @@
+{
+  "name": "Callout",
+  "type": "object",
+  "properties": {
+    "shiftId": {
+      "type": "string"
+    },
+    "teamMemberId": {
+      "type": "string"
+    },
+    "locationId": {
+      "type": "string"
+    },
+    "roleId": {
+      "type": "string"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "note": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "submitted",
+        "coverage_needed",
+        "converted_to_open",
+        "covered",
+        "cancelled"
+      ],
+      "default": "submitted"
+    },
+    "submittedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reviewedBy": {
+      "type": "string"
+    },
+    "reviewedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "managerNote": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "shiftId",
+    "teamMemberId"
+  ]
+}

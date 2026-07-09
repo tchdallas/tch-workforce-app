@@ -1,0 +1,97 @@
+{
+  "name": "Shift",
+  "type": "object",
+  "properties": {
+    "locationId": {
+      "type": "string"
+    },
+    "roleId": {
+      "type": "string"
+    },
+    "teamMemberId": {
+      "type": "string",
+      "description": "Null for open shifts"
+    },
+    "startDateTime": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "endDateTime": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "breakMinutes": {
+      "type": "number",
+      "default": 0
+    },
+    "breakNote": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "published",
+        "cancelled"
+      ],
+      "default": "draft"
+    },
+    "shiftType": {
+      "type": "string",
+      "enum": [
+        "assigned",
+        "open"
+      ],
+      "default": "assigned"
+    },
+    "teamFacingNotes": {
+      "type": "string"
+    },
+    "internalNotes": {
+      "type": "string"
+    },
+    "payRateUsed": {
+      "type": "number"
+    },
+    "estimatedLaborCost": {
+      "type": "number"
+    },
+    "coverageStatus": {
+      "type": "string",
+      "enum": [
+        "covered",
+        "coverage_needed",
+        "open",
+        "callout"
+      ],
+      "default": "covered"
+    },
+    "recentChangeFlag": {
+      "type": "boolean",
+      "default": false
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "archived": {
+      "type": "boolean",
+      "default": false,
+      "description": "Soft-archived shifts (older than ~90 days). Still queryable for reports/history but excluded from live views."
+    }
+  },
+  "required": [
+    "locationId",
+    "roleId",
+    "startDateTime",
+    "endDateTime"
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "name": "BlackoutDay",
+  "type": "object",
+  "properties": {
+    "locationId": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "dateStart": {
+      "type": "string",
+      "format": "date"
+    },
+    "dateEnd": {
+      "type": "string",
+      "format": "date"
+    },
+    "ruleType": {
+      "type": "string",
+      "enum": [
+        "block_requests",
+        "require_admin_approval",
+        "warning_only"
+      ],
+      "default": "require_admin_approval"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "locationId",
+    "name",
+    "dateStart",
+    "dateEnd"
+  ]
+}

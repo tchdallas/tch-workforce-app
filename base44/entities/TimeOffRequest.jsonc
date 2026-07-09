@@ -1,0 +1,52 @@
+{
+  "name": "TimeOffRequest",
+  "type": "object",
+  "properties": {
+    "teamMemberId": {
+      "type": "string"
+    },
+    "startDateTime": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "endDateTime": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "isFullDay": {
+      "type": "boolean",
+      "default": true
+    },
+    "reason": {
+      "type": "string"
+    },
+    "note": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "approved",
+        "denied",
+        "cancelled"
+      ],
+      "default": "pending"
+    },
+    "reviewedBy": {
+      "type": "string"
+    },
+    "reviewedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "managerNote": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "teamMemberId",
+    "startDateTime",
+    "endDateTime"
+  ]
+}

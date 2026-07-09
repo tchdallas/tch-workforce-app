@@ -1,0 +1,131 @@
+@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@300;400;500;600;700;800&family=Bebas+Neue&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  Texas Card House brand (Brand Book 2024):
+    Signature Gold  #d2ad74  = hsl(36 51% 64%)
+    Deep Gold       #86764e  = hsl(43 27% 42%)   (borders/hover on gold)
+    Primary Black   #000000
+    TCH Social Navy #0c2340  = hsl(214 68% 15%)  (charts/secondary accents)
+    Cool Gray       #f2f4f8  = hsl(220 30% 96%)  (light surfaces)
+  Type: Bebas Neue (headlines, all caps) · Figtree (body)
+*/
+@layer base {
+  :root {
+    --font-inter: 'Figtree', sans-serif;
+    --font-display: 'Bebas Neue', sans-serif;
+
+    --background: 220 30% 96%;          /* cool gray #f2f4f8 */
+    --foreground: 0 0% 6%;              /* near-black */
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 6%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 6%;
+    --primary: 0 0% 8%;                 /* brand black */
+    --primary-foreground: 36 51% 64%;   /* gold on black */
+    --secondary: 220 20% 92%;
+    --secondary-foreground: 0 0% 6%;
+    --muted: 220 20% 92%;
+    --muted-foreground: 0 0% 40%;
+    --accent: 36 51% 64%;               /* signature gold #d2ad74 */
+    --accent-foreground: 0 0% 6%;
+    --destructive: 0 60% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 12% 87%;
+    --input: 220 12% 87%;
+    --ring: 36 51% 54%;
+    --chart-1: 36 51% 54%;              /* gold */
+    --chart-2: 214 68% 25%;             /* navy */
+    --chart-3: 152 40% 38%;
+    --chart-4: 43 27% 42%;              /* deep gold */
+    --chart-5: 0 55% 45%;
+    --radius: 0.625rem;
+
+    --success: 152 40% 34%;
+    --success-foreground: 0 0% 100%;
+    --warning: 40 85% 45%;
+    --warning-foreground: 0 0% 6%;
+
+    --sidebar-background: 0 0% 7%;      /* black sidebar, gold highlights */
+    --sidebar-foreground: 0 0% 88%;
+    --sidebar-primary: 36 51% 64%;
+    --sidebar-primary-foreground: 0 0% 6%;
+    --sidebar-accent: 0 0% 13%;
+    --sidebar-accent-foreground: 36 51% 74%;
+    --sidebar-border: 0 0% 15%;
+    --sidebar-ring: 36 51% 64%;
+  }
+
+  .dark {
+    --background: 0 0% 5%;              /* brand black */
+    --foreground: 0 0% 93%;
+    --card: 0 0% 9%;
+    --card-foreground: 0 0% 93%;
+    --popover: 0 0% 9%;
+    --popover-foreground: 0 0% 93%;
+    --primary: 36 51% 64%;              /* signature gold */
+    --primary-foreground: 0 0% 6%;
+    --secondary: 0 0% 14%;
+    --secondary-foreground: 0 0% 88%;
+    --muted: 0 0% 14%;
+    --muted-foreground: 0 0% 58%;
+    --accent: 36 51% 64%;
+    --accent-foreground: 0 0% 6%;
+    --destructive: 0 55% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 17%;
+    --input: 0 0% 17%;
+    --ring: 36 51% 64%;
+    --chart-1: 36 51% 64%;              /* gold */
+    --chart-2: 214 60% 45%;             /* navy, lifted for dark bg */
+    --chart-3: 152 40% 42%;
+    --chart-4: 43 27% 52%;
+    --chart-5: 0 55% 50%;
+
+    --success: 152 40% 40%;
+    --success-foreground: 0 0% 100%;
+    --warning: 40 85% 50%;
+    --warning-foreground: 0 0% 6%;
+
+    --sidebar-background: 0 0% 6%;
+    --sidebar-foreground: 0 0% 85%;
+    --sidebar-primary: 36 51% 64%;
+    --sidebar-primary-foreground: 0 0% 6%;
+    --sidebar-accent: 0 0% 12%;
+    --sidebar-accent-foreground: 36 51% 74%;
+    --sidebar-border: 0 0% 14%;
+    --sidebar-ring: 36 51% 64%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-inter;
+  }
+
+  :root {
+    --safe-area-top: env(safe-area-inset-top, 0px);
+    --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-area-left: env(safe-area-inset-left, 0px);
+    --safe-area-right: env(safe-area-inset-right, 0px);
+  }
+
+  /* App shell height: 100vh everywhere, upgraded to 100dvh where supported
+     (older Safari drops unsupported inline dvh styles entirely, which left the
+     shell heightless-but-overflow-hidden — no scrolling on those Macs) */
+  .app-shell {
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  button, a, [role="button"] {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+}

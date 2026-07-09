@@ -1,0 +1,50 @@
+{
+  "name": "ScheduleTemplate",
+  "type": "object",
+  "properties": {
+    "locationId": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "archived"
+      ],
+      "default": "active"
+    },
+    "shifts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "roleId": {
+            "type": "string"
+          },
+          "dayOfWeek": {
+            "type": "number"
+          },
+          "startTime": {
+            "type": "string"
+          },
+          "endTime": {
+            "type": "string"
+          },
+          "breakMinutes": {
+            "type": "number"
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "locationId",
+    "name"
+  ]
+}

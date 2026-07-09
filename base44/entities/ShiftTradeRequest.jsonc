@@ -1,0 +1,45 @@
+{
+  "name": "ShiftTradeRequest",
+  "type": "object",
+  "properties": {
+    "requestingTeamMemberId": {
+      "type": "string"
+    },
+    "targetTeamMemberId": {
+      "type": "string"
+    },
+    "originalShiftId": {
+      "type": "string"
+    },
+    "requestedShiftId": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending_team_member",
+        "pending_manager",
+        "approved",
+        "denied",
+        "cancelled"
+      ],
+      "default": "pending_team_member"
+    },
+    "reviewedBy": {
+      "type": "string"
+    },
+    "reviewedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "managerNote": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "requestingTeamMemberId",
+    "targetTeamMemberId",
+    "originalShiftId",
+    "requestedShiftId"
+  ]
+}

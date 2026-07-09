@@ -1,0 +1,114 @@
+{
+  "name": "TeamMember",
+  "type": "object",
+  "properties": {
+    "tmNumber": {
+      "type": "string",
+      "description": "Team Member ID (TM #)"
+    },
+    "firstName": {
+      "type": "string"
+    },
+    "lastName": {
+      "type": "string"
+    },
+    "preferredName": {
+      "type": "string"
+    },
+    "email": {
+      "type": "string"
+    },
+    "phone": {
+      "type": "string"
+    },
+    "dateOfBirth": {
+      "type": "string",
+      "format": "date"
+    },
+    "address": {
+      "type": "string"
+    },
+    "city": {
+      "type": "string"
+    },
+    "state": {
+      "type": "string"
+    },
+    "zip": {
+      "type": "string"
+    },
+    "homeLocationId": {
+      "type": "string"
+    },
+    "assignedLocationIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "assignedRoleIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "invited",
+        "active",
+        "inactive",
+        "archived"
+      ],
+      "default": "active"
+    },
+    "profilePhoto": {
+      "type": "string"
+    },
+    "emergencyContactName": {
+      "type": "string"
+    },
+    "emergencyContactPhone": {
+      "type": "string"
+    },
+    "startDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Manager/admin only notes"
+    },
+    "themePreference": {
+      "type": "string",
+      "enum": [
+        "device",
+        "light",
+        "dark"
+      ],
+      "default": "device"
+    },
+    "permissionLevel": {
+      "type": "string",
+      "enum": [
+        "super_admin",
+        "corporate_admin",
+        "location_admin",
+        "manager",
+        "scheduler",
+        "team_member"
+      ],
+      "default": "team_member"
+    },
+    "noShiftSwap": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, manager has blocked this member from giving away or swapping shifts"
+    }
+  },
+  "required": [
+    "firstName",
+    "lastName",
+    "email"
+  ]
+}

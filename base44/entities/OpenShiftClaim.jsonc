@@ -1,0 +1,36 @@
+{
+  "name": "OpenShiftClaim",
+  "type": "object",
+  "properties": {
+    "shiftId": {
+      "type": "string"
+    },
+    "teamMemberId": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "approved",
+        "denied",
+        "cancelled"
+      ],
+      "default": "pending"
+    },
+    "reviewedBy": {
+      "type": "string"
+    },
+    "reviewedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "managerNote": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "shiftId",
+    "teamMemberId"
+  ]
+}

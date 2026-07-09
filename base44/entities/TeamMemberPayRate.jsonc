@@ -1,0 +1,33 @@
+{
+  "name": "TeamMemberPayRate",
+  "type": "object",
+  "properties": {
+    "teamMemberId": {
+      "type": "string"
+    },
+    "locationId": {
+      "type": "string"
+    },
+    "roleId": {
+      "type": "string"
+    },
+    "payRate": {
+      "type": "number",
+      "description": "Hourly pay rate"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "inactive"
+      ],
+      "default": "active"
+    }
+  },
+  "required": [
+    "teamMemberId",
+    "locationId",
+    "roleId",
+    "payRate"
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "name": "LiveRoadmapNote",
+  "type": "object",
+  "properties": {
+    "locationId": {
+      "type": "string"
+    },
+    "shiftId": {
+      "type": "string"
+    },
+    "teamMemberId": {
+      "type": "string"
+    },
+    "roleId": {
+      "type": "string"
+    },
+    "noteType": {
+      "type": "string",
+      "enum": [
+        "general",
+        "role",
+        "team_member",
+        "shift",
+        "coverage",
+        "rotation",
+        "event"
+      ],
+      "default": "general"
+    },
+    "visibility": {
+      "type": "string",
+      "enum": [
+        "managers_and_above",
+        "admins_only",
+        "specific_role_managers",
+        "team_member_facing"
+      ],
+      "default": "managers_and_above"
+    },
+    "note": {
+      "type": "string"
+    },
+    "date": {
+      "type": "string",
+      "format": "date"
+    }
+  },
+  "required": [
+    "locationId",
+    "note"
+  ]
+}

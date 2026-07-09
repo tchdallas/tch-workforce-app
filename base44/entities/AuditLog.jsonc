@@ -1,0 +1,35 @@
+{
+  "name": "AuditLog",
+  "type": "object",
+  "properties": {
+    "actorId": {
+      "type": "string"
+    },
+    "actorName": {
+      "type": "string"
+    },
+    "action": {
+      "type": "string"
+    },
+    "entityType": {
+      "type": "string"
+    },
+    "entityId": {
+      "type": "string"
+    },
+    "beforeValue": {
+      "type": "string"
+    },
+    "afterValue": {
+      "type": "string"
+    },
+    "details": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "actorId",
+    "action",
+    "entityType"
+  ]
+}

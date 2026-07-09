@@ -1,0 +1,56 @@
+{
+  "name": "ShiftGiveawayRequest",
+  "type": "object",
+  "properties": {
+    "originalTeamMemberId": {
+      "type": "string"
+    },
+    "acceptingTeamMemberId": {
+      "type": "string"
+    },
+    "shiftId": {
+      "type": "string"
+    },
+    "offerType": {
+      "type": "string",
+      "enum": [
+        "specific",
+        "qualified_location",
+        "qualified_all"
+      ],
+      "default": "qualified_location"
+    },
+    "targetTeamMemberIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "open",
+        "pending_manager",
+        "approved",
+        "denied",
+        "cancelled",
+        "accepted"
+      ],
+      "default": "open"
+    },
+    "reviewedBy": {
+      "type": "string"
+    },
+    "reviewedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "managerNote": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "originalTeamMemberId",
+    "shiftId"
+  ]
+}

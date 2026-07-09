@@ -1,0 +1,43 @@
+{
+  "name": "Notification",
+  "type": "object",
+  "properties": {
+    "recipientTeamMemberId": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "message": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string"
+    },
+    "channel": {
+      "type": "string",
+      "enum": [
+        "push",
+        "email",
+        "in_app",
+        "sms_placeholder"
+      ],
+      "default": "in_app"
+    },
+    "readStatus": {
+      "type": "boolean",
+      "default": false
+    },
+    "relatedEntityType": {
+      "type": "string"
+    },
+    "relatedEntityId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "recipientTeamMemberId",
+    "title",
+    "message"
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "name": "Location",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Location name"
+    },
+    "abbreviation": {
+      "type": "string",
+      "description": "Short abbreviation"
+    },
+    "address": {
+      "type": "string"
+    },
+    "city": {
+      "type": "string"
+    },
+    "state": {
+      "type": "string"
+    },
+    "zip": {
+      "type": "string"
+    },
+    "contactPhone": {
+      "type": "string",
+      "description": "Contact phone number for the location"
+    },
+    "timezone": {
+      "type": "string",
+      "default": "America/Chicago"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "archived"
+      ],
+      "default": "active"
+    }
+  },
+  "required": [
+    "name"
+  ]
+}
