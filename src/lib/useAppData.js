@@ -57,6 +57,17 @@ export function useRoles() {
   });
 }
 
+// Par levels (target headcount per location/role/gaming-day/time window).
+// Scheduler+ can read; RLS scopes to the viewer's locations.
+export function usePars() {
+  return useQuery({
+    queryKey: ['par-levels'],
+    queryFn: () => base44.entities.ParLevel.filter({ status: 'active' }, 'dayOfWeek'),
+    placeholderData: [],
+    ...SEMI_STATIC,
+  });
+}
+
 export function useTeamMembers() {
   return useQuery({
     queryKey: ['teamMembers'],
