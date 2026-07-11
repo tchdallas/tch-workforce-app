@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import MemberFileTab from '@/components/discipline/MemberFileTab';
 
 const defaultMember = {
   tmNumber: '', firstName: '', lastName: '', preferredName: '', email: '', phone: '',
@@ -66,6 +67,7 @@ export default function TeamMemberModal({ open, onClose, member, locations, role
             <TabsTrigger value="assignments" className="text-xs">Assignments</TabsTrigger>
             <TabsTrigger value="contact" className="text-xs">Contact</TabsTrigger>
             <TabsTrigger value="admin" className="text-xs">Admin</TabsTrigger>
+            {isEdit && <TabsTrigger value="file" className="text-xs">File</TabsTrigger>}
           </TabsList>
 
           {/* native overflow, not Radix ScrollArea: Safari can't scroll a
@@ -279,6 +281,16 @@ export default function TeamMemberModal({ open, onClose, member, locations, role
                 />
               </div>
             </TabsContent>
+
+            {isEdit && (
+              <TabsContent value="file" className="mt-0">
+                {/* live journal + discipline record — saves itself, independent of the form's Update button */}
+                <MemberFileTab
+                  memberId={member.id}
+                  memberName={form.preferredName ? `${form.preferredName} ${form.lastName}` : `${form.firstName} ${form.lastName}`}
+                />
+              </TabsContent>
+            )}
           </div>
         </Tabs>
 

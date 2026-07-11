@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { X, LayoutDashboard, Calendar, Radio, Users, MapPin, Shield, BarChart3, Settings, Bell, ClipboardList, AlertTriangle, HandHelping, Activity, LayoutTemplate, CalendarCheck, LogOut } from 'lucide-react';
+import { X, LayoutDashboard, Calendar, Radio, Users, MapPin, Shield, BarChart3, Settings, Bell, ClipboardList, AlertTriangle, HandHelping, Activity, LayoutTemplate, CalendarCheck, LogOut, UserCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useCurrentMember } from '@/hooks/useCurrentMember';
@@ -18,6 +18,7 @@ const allNavItems = [
   { label: 'Team Members', icon: Users, path: '/team-members', managerOnly: true },
   { label: 'Locations', icon: MapPin, path: '/locations', managerOnly: true },
   { label: 'Roles', icon: Shield, path: '/roles', managerOnly: true },
+  { label: 'Attendance', icon: UserCheck, path: '/attendance', managerOnly: true },
   { label: 'Reports', icon: BarChart3, path: '/reports', managerOnly: true },
   { label: 'Notifications', icon: Bell, path: '/notifications', managerOnly: false },
   { label: 'Audit Log', icon: Activity, path: '/audit-log', managerOnly: true },

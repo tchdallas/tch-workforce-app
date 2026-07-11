@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import PageHeader from '@/components/common/PageHeader';
 import StatCard from '@/components/common/StatCard';
+import ActionItems from '@/components/dashboard/ActionItems';
 import LocationSelector from '@/components/common/LocationSelector';
 import { useLocationFilter } from '@/hooks/useLocationFilter';
 import { useTeamMembers } from '@/lib/useAppData';
@@ -103,6 +104,8 @@ export default function Dashboard() {
         <PullToRefreshIndicator pullDistance={pullDistance} refreshing={refreshing} />
         <PageHeader title="Dashboard" subtitle={format(today, 'EEEE, MMMM d, yyyy')} />
 
+        <ActionItems showEmpty />
+
         <div className="grid grid-cols-2 gap-3 mb-6">
           <StatCard label="My Shifts Today" value={myShiftsToday.length} icon={Calendar} />
           <StatCard label="Open Shifts" value={openShifts.length} icon={HandHelping} variant={openShifts.length > 0 ? 'warning' : 'default'} />
@@ -190,6 +193,9 @@ export default function Dashboard() {
           </Button>
         </Link>
       </PageHeader>
+
+      {/* managers get points and documents too — show only when something's pending */}
+      <ActionItems />
 
       {/* Stats Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
