@@ -57,12 +57,21 @@ export function useRoles() {
   });
 }
 
-// Par levels (target headcount per location/role/gaming-day/time window).
-// Scheduler+ can read; RLS scopes to the viewer's locations.
+// Par staffing-plan templates (named, location-wide). Scheduler+ read.
+export function useParTemplates() {
+  return useQuery({
+    queryKey: ['par-templates'],
+    queryFn: () => base44.entities.ParTemplate.filter({ status: 'active' }, 'name'),
+    placeholderData: [],
+    ...SEMI_STATIC,
+  });
+}
+
+// Par windows (target headcount per template/role/gaming-day/time window).
 export function usePars() {
   return useQuery({
     queryKey: ['par-levels'],
-    queryFn: () => base44.entities.ParLevel.filter({ status: 'active' }, 'dayOfWeek'),
+    queryFn: () => base44.entities.ParLevel.list('dayOfWeek'),
     placeholderData: [],
     ...SEMI_STATIC,
   });

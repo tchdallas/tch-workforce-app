@@ -125,7 +125,9 @@ const ENTITIES = {
   Callout: { table: 'callouts' },
   TimeEntry: { table: 'time_entries' },
   LiveRoadmapNote: { table: 'live_roadmap_notes' },
-  // par levels: target headcount per location/role/gaming-day/time window
+  // par levels: named location-wide staffing-plan templates; each holds
+  // target-headcount windows per role/gaming-day/time
+  ParTemplate: { table: 'par_templates' },
   ParLevel: { table: 'par_levels' },
   // blindWrites: creators of these rows often can't SELECT them back under RLS
   // (a notification belongs to its recipient; audit reads are manager+), so
