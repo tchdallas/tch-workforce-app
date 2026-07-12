@@ -43,7 +43,7 @@ begin
 end;
 $$;
 
--- Enable in production only (uncomment / run at deploy):
--- create extension if not exists pg_cron;
--- select cron.schedule('remind-downs-dispute', '0 9 * * *',
---   'select private.remind_downs_dispute()');
+-- Enabled in production (reminders on):
+create extension if not exists pg_cron;
+select cron.schedule('remind-downs-dispute', '0 9 * * *',
+  'select private.remind_downs_dispute()');
