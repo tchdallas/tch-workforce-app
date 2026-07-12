@@ -31,6 +31,7 @@ import ParLevels from '@/pages/ParLevels';
 import Attendance from '@/pages/Attendance';
 import Messages from '@/pages/Messages';
 import Announcements from '@/pages/Announcements';
+import Downs from '@/pages/Downs';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, isAuthenticated, authError } = useAuth();
@@ -74,6 +75,7 @@ const AuthenticatedApp = () => {
         <Route path="/schedule-templates" element={<ScheduleTemplates />} />
         <Route path="/timesheets" element={<Timesheets />} />
         <Route path="/attendance" element={<Attendance />} />
+        <Route path="/downs" element={<Downs />} />
       </Route>
       {/* fullscreen kiosk — no app chrome */}
       <Route path="/kiosk" element={<Kiosk />} />

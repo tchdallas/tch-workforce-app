@@ -11,8 +11,9 @@ import TimeOffForm from '@/components/profile/TimeOffForm';
 import AvailabilityForm from '@/components/profile/AvailabilityForm';
 import ChangePasswordCard from '@/components/profile/ChangePasswordCard';
 import MyDocumentsTab from '@/components/discipline/MyDocumentsTab';
+import MemberDownsView from '@/components/downs/MemberDownsView';
 import { toast } from 'sonner';
-import { User, CalendarOff, Clock, LogOut, FileText } from 'lucide-react';
+import { User, CalendarOff, Clock, LogOut, FileText, Trophy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/AuthContext';
 
@@ -62,6 +63,9 @@ export default function MyProfile() {
           <TabsTrigger value="documents" className="flex-1 gap-1.5 text-xs">
             <FileText className="w-3.5 h-3.5" /> Documents
           </TabsTrigger>
+          <TabsTrigger value="downs" className="flex-1 gap-1.5 text-xs">
+            <Trophy className="w-3.5 h-3.5" /> Downs
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="info" className="mt-4">
@@ -79,6 +83,10 @@ export default function MyProfile() {
 
         <TabsContent value="documents" className="mt-4">
           <MyDocumentsTab member={member} />
+        </TabsContent>
+
+        <TabsContent value="downs" className="mt-4">
+          <MemberDownsView memberId={member.id} homeLocationId={member.homeLocationId} self />
         </TabsContent>
       </Tabs>
 

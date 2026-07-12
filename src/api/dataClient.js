@@ -141,6 +141,13 @@ const ENTITIES = {
   // void transitions go through DB functions so the state machine holds
   JournalEntry: { table: 'journal_entries' },
   DisciplineDocument: { table: 'discipline_documents' },
+  TournamentSeries: { table: 'tournament_series', readOnly: ['createdBy', 'created_by'] },
+  Tournament: { table: 'tournaments', readOnly: ['createdBy', 'created_by'] },
+  DownCard: { table: 'down_cards', readOnly: ['createdBy', 'created_by'] },
+  Down: { table: 'downs' },
+  DownCardPhoto: { table: 'down_card_photos' },
+  DownPayPeriod: { table: 'down_pay_periods' },
+  DownDispute: { table: 'down_disputes' },
   // blindWrites: creators of these rows often can't SELECT them back under RLS
   // (a notification belongs to its recipient; audit reads are manager+), so
   // writes skip the RETURNING clause and reads of the result aren't attempted
