@@ -23,7 +23,7 @@ export default function MyProfile() {
   const { logout } = useAuth();
   // deep-link support: /my-profile?tab=documents (used by dashboard action items)
   const [searchParams] = useSearchParams();
-  const initialTab = ['info', 'timeoff', 'availability', 'documents'].includes(searchParams.get('tab'))
+  const initialTab = ['info', 'timeoff', 'availability', 'documents', 'downs'].includes(searchParams.get('tab'))
     ? searchParams.get('tab') : 'info';
 
   const updateMutation = useMutation({
