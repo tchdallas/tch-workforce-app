@@ -150,6 +150,9 @@ export default function TeamMembers() {
   const openEdit = (id) => setSearchParams({ edit: id });
   const closeModal = () => setSearchParams({});
 
+  // a create that the DB rejected: reopen the form pre-filled instead of blank
+  const [failedDraft, setFailedDraft] = React.useState(null);
+
   const { data: teamMembers = [], isLoading: loadingMembers } = useTeamMembers();
 
   // archived members load only when an admin asks for them
@@ -207,8 +210,15 @@ export default function TeamMembers() {
       closeModal();
       return { prev };
     },
-    onError: (_, __, ctx) => {
+    onSuccess: () => {
+      setFailedDraft(null);
+      toast.success('Team member added');
+    },
+    onError: (err, data, ctx) => {
       queryClient.setQueryData(['teamMembers'], ctx.prev);
+      // reopen with everything they typed, and say what went wrong
+      setFailedDraft(data);
+      toast.error(err.message || 'Could not add team member');
       openNew();
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['teamMembers'] }),
@@ -225,8 +235,9 @@ export default function TeamMembers() {
       closeModal();
       return { prev };
     },
-    onError: (_, { id }, ctx) => {
+    onError: (err, { id }, ctx) => {
       queryClient.setQueryData(['teamMembers'], ctx.prev);
+      toast.error(err.message || 'Could not save changes');
       openEdit(id);
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['teamMembers'] }),
@@ -493,8 +504,8 @@ export default function TeamMembers() {
 
       <TeamMemberModal
         open={modalOpen}
-        onClose={closeModal}
-        member={editMember}
+        onClose={() => { setFailedDraft(null); closeModal(); }}
+        member={editMember || (isNew ? failedDraft : null)}
         locations={locations}
         roles={roles}
         existingMembers={teamMembers}

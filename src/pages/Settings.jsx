@@ -10,6 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import PageHeader from '@/components/common/PageHeader';
+import AttendancePolicySection from '@/components/settings/AttendancePolicySection';
 import { useLocations } from '@/lib/useAppData';
 import { useCurrentMember } from '@/hooks/useCurrentMember';
 import { toast } from 'sonner';
@@ -267,11 +268,14 @@ export default function Settings() {
     );
   };
 
+  // the attendance policy is the company rulebook — super admins only
+  const isSuperAdmin = member?.permissionLevel === 'super_admin';
   const tabs = [
     { id: 'general', label: 'General' },
     { id: 'approvals', label: 'Approvals' },
     { id: 'rules', label: 'Shift Rules' },
     { id: 'roadmap', label: 'Roadmap' },
+    ...(isSuperAdmin ? [{ id: 'attendance', label: 'Attendance Policy' }] : []),
   ];
 
   // The database rejects non-admin writes regardless; this hides the page
@@ -332,11 +336,15 @@ export default function Settings() {
         </TabsList>
         {tabs.map(t => (
           <TabsContent key={t.id} value={t.id}>
-            <Card>
-              <CardContent className="p-6">
-                {SETTING_KEYS.filter(s => s.tab === t.id).map(renderSetting)}
-              </CardContent>
-            </Card>
+            {t.id === 'attendance' ? (
+              <AttendancePolicySection />
+            ) : (
+              <Card>
+                <CardContent className="p-6">
+                  {SETTING_KEYS.filter(s => s.tab === t.id).map(renderSetting)}
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
         ))}
       </Tabs>

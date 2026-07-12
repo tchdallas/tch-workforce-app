@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useCurrentMember } from '@/hooks/useCurrentMember';
@@ -9,8 +10,9 @@ import PersonalInfoForm from '@/components/profile/PersonalInfoForm';
 import TimeOffForm from '@/components/profile/TimeOffForm';
 import AvailabilityForm from '@/components/profile/AvailabilityForm';
 import ChangePasswordCard from '@/components/profile/ChangePasswordCard';
+import MyDocumentsTab from '@/components/discipline/MyDocumentsTab';
 import { toast } from 'sonner';
-import { User, CalendarOff, Clock, LogOut } from 'lucide-react';
+import { User, CalendarOff, Clock, LogOut, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/AuthContext';
 
@@ -18,6 +20,10 @@ export default function MyProfile() {
   const queryClient = useQueryClient();
   const { member } = useCurrentMember();
   const { logout } = useAuth();
+  // deep-link support: /my-profile?tab=documents (used by dashboard action items)
+  const [searchParams] = useSearchParams();
+  const initialTab = ['info', 'timeoff', 'availability', 'documents'].includes(searchParams.get('tab'))
+    ? searchParams.get('tab') : 'info';
 
   const updateMutation = useMutation({
     mutationFn: (data) => base44.entities.TeamMember.update(member.id, data),
@@ -42,7 +48,7 @@ export default function MyProfile() {
 
       <ProfilePhotoSection member={member} onSave={(data) => updateMutation.mutate(data)} />
 
-      <Tabs defaultValue="info" className="mt-6">
+      <Tabs defaultValue={initialTab} className="mt-6">
         <TabsList className="w-full">
           <TabsTrigger value="info" className="flex-1 gap-1.5 text-xs">
             <User className="w-3.5 h-3.5" /> Personal Info
@@ -52,6 +58,9 @@ export default function MyProfile() {
           </TabsTrigger>
           <TabsTrigger value="availability" className="flex-1 gap-1.5 text-xs">
             <Clock className="w-3.5 h-3.5" /> Availability
+          </TabsTrigger>
+          <TabsTrigger value="documents" className="flex-1 gap-1.5 text-xs">
+            <FileText className="w-3.5 h-3.5" /> Documents
           </TabsTrigger>
         </TabsList>
 
@@ -66,6 +75,10 @@ export default function MyProfile() {
 
         <TabsContent value="availability" className="mt-4">
           <AvailabilityForm memberId={member.id} />
+        </TabsContent>
+
+        <TabsContent value="documents" className="mt-4">
+          <MyDocumentsTab member={member} />
         </TabsContent>
       </Tabs>
 

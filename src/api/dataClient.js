@@ -130,6 +130,17 @@ const ENTITIES = {
   // target-headcount windows per role/gaming-day/time
   ParTemplate: { table: 'par_templates' },
   ParLevel: { table: 'par_levels' },
+  // attendance points: issuing/excusing/appealing go through DB functions
+  // (issue_attendance_infraction etc.) so doubling and role checks happen
+  // server-side; these entities are for reads and the super-admin policy editor
+  AttendanceInfraction: { table: 'attendance_infractions' },
+  AttendanceInfractionType: { table: 'attendance_infraction_types' },
+  AttendancePolicySettings: { table: 'attendance_policy_settings' },
+  HighVolumeDay: { table: 'high_volume_days' },
+  // performance documentation: drafts edit directly; issue/sign/refuse/witness/
+  // void transitions go through DB functions so the state machine holds
+  JournalEntry: { table: 'journal_entries' },
+  DisciplineDocument: { table: 'discipline_documents' },
   // blindWrites: creators of these rows often can't SELECT them back under RLS
   // (a notification belongs to its recipient; audit reads are manager+), so
   // writes skip the RETURNING clause and reads of the result aren't attempted
@@ -213,8 +224,10 @@ function mapDataIn(cfg, data) {
       continue;
     }
     const col = colFor(cfg, k);
-    // base44 tolerated '' for empty references; Postgres uuid columns do not
-    out[col] = v === '' && col.endsWith('_id') ? null : tsToDb(v);
+    // base44 tolerated '' for empty values; Postgres rejects '' for every
+    // non-text type (uuid, date, numeric, ...) — store blank as null, same as
+    // mapChildIn (an empty date-of-birth input killed team-member creation)
+    out[col] = v === '' ? null : tsToDb(v);
   }
   return out;
 }

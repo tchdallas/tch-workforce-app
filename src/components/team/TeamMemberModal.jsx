@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AvailabilityForm from '@/components/profile/AvailabilityForm';
+import MemberFileTab from '@/components/discipline/MemberFileTab';
 
 const defaultMember = {
   tmNumber: '', firstName: '', lastName: '', preferredName: '', email: '', phone: '',
@@ -68,6 +69,7 @@ export default function TeamMemberModal({ open, onClose, member, locations, role
             <TabsTrigger value="contact" className="text-xs">Contact</TabsTrigger>
             <TabsTrigger value="admin" className="text-xs">Admin</TabsTrigger>
             {isEdit && <TabsTrigger value="availability" className="text-xs">Availability</TabsTrigger>}
+            {isEdit && <TabsTrigger value="file" className="text-xs">File</TabsTrigger>}
           </TabsList>
 
           {/* native overflow, not Radix ScrollArea: Safari can't scroll a
@@ -288,6 +290,15 @@ export default function TeamMemberModal({ open, onClose, member, locations, role
                   This team member's weekly availability — drives scheduling recommendations and warnings. Saves per day.
                 </p>
                 <AvailabilityForm memberId={member.id} manager />
+              </TabsContent>
+            )}
+            {isEdit && (
+              <TabsContent value="file" className="mt-0">
+                {/* live journal + discipline record — saves itself, independent of the form's Update button */}
+                <MemberFileTab
+                  memberId={member.id}
+                  memberName={form.preferredName ? `${form.preferredName} ${form.lastName}` : `${form.firstName} ${form.lastName}`}
+                />
               </TabsContent>
             )}
           </div>
