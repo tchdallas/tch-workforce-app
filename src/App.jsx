@@ -27,6 +27,7 @@ import ScheduleTemplates from '@/pages/ScheduleTemplates';
 import Login from '@/pages/Login';
 import Kiosk from '@/pages/Kiosk';
 import Timesheets from '@/pages/Timesheets';
+import ParLevels from '@/pages/ParLevels';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, isAuthenticated, authError } = useAuth();
@@ -55,6 +56,7 @@ const AuthenticatedApp = () => {
         <Route path="/team-members" element={<TeamMembers />} />
         <Route path="/locations" element={<Locations />} />
         <Route path="/roles" element={<Roles />} />
+        <Route path="/par-levels" element={<ParLevels />} />
         <Route path="/requests" element={<Requests />} />
         <Route path="/callouts" element={<Callouts />} />
         <Route path="/open-shifts" element={<OpenShifts />} />

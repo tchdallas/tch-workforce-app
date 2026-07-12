@@ -2,8 +2,9 @@ import React, { useMemo, useState } from 'react';
 import { format, isSameDay } from 'date-fns';
 import { cn, businessDayOf, formatEndTime } from '@/lib/utils';
 import { ChevronDown, ChevronRight, User, Clock, Edit2 } from 'lucide-react';
+import { roleDayCoverage, coverageClasses } from '@/lib/parCoverage';
 
-export default function DayViewSummary({ date, shifts, roles, teamMembers = [], onShiftClick, dayStartHour = 0 }) {
+export default function DayViewSummary({ date, shifts, roles, teamMembers = [], onShiftClick, dayStartHour = 0, parWindows = [], planName, locationId }) {
   const [collapsedRoles, setCollapsedRoles] = useState(new Set());
   // drilldown: Set of "roleId|time" keys that are expanded
   const [expandedSlots, setExpandedSlots] = useState(new Set());
@@ -66,6 +67,22 @@ export default function DayViewSummary({ date, shifts, roles, teamMembers = [], 
   const rolesWithShifts = activeRoles.filter(r => roleData[r.id]);
   const totalShifts = dayShifts.length;
 
+  // par coverage for this gaming day, per role (only roles with a window today)
+  const coverageByRole = useMemo(() => {
+    const m = {};
+    activeRoles.forEach(r => {
+      const cov = roleDayCoverage(parWindows, dayShifts, r.id, date, dayStartHour, locationId);
+      if (cov.length) m[r.id] = cov;
+    });
+    return m;
+  }, [parWindows, dayShifts, activeRoles, date, dayStartHour, locationId]);
+  const shortCount = useMemo(
+    () => Object.values(coverageByRole).flat().filter(c => c.status === 'short').length,
+    [coverageByRole]
+  );
+  // include roles that have a par target today even if nothing is scheduled yet
+  const rolesToShow = activeRoles.filter(r => roleData[r.id] || coverageByRole[r.id]);
+
   const getTmName = (tmId) => {
     if (!tmId) return 'Open Shift';
     const tm = teamMembers.find(t => t.id === tmId);
@@ -90,6 +107,14 @@ export default function DayViewSummary({ date, shifts, roles, teamMembers = [], 
           <div>
             <h2 className="text-sm font-semibold">{format(date, 'EEEE, MMMM d, yyyy')}</h2>
             <p className="text-xs text-muted-foreground mt-0.5">{totalShifts} shift{totalShifts !== 1 ? 's' : ''} scheduled</p>
+            {parWindows.length > 0 && (
+              <p className="text-xs mt-0.5">
+                {shortCount > 0
+                  ? <span className="text-red-600 dark:text-red-400 font-medium">{shortCount} par window{shortCount !== 1 ? 's' : ''} understaffed</span>
+                  : <span className="text-emerald-600 dark:text-emerald-400 font-medium">All pars met</span>}
+                {planName && <span className="text-muted-foreground"> · {planName}</span>}
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-3 flex-wrap justify-end">
             {rolesWithShifts.map(r => {
@@ -104,12 +129,12 @@ export default function DayViewSummary({ date, shifts, roles, teamMembers = [], 
           </div>
         </div>
 
-        {rolesWithShifts.length === 0 ? (
+        {rolesToShow.length === 0 ? (
           <div className="py-12 text-center text-sm text-muted-foreground">
             No shifts scheduled for this day.
           </div>
         ) : (
-          rolesWithShifts.map(role => {
+          rolesToShow.map(role => {
             const timeslots = roleData[role.id] || {};
             const isCollapsed = collapsedRoles.has(role.id);
             const roleTotal = Object.values(timeslots).reduce((a, b) => a + b.length, 0);
@@ -129,6 +154,22 @@ export default function DayViewSummary({ date, shifts, roles, teamMembers = [], 
                   <span className="text-xs font-semibold flex-1">{role.name}</span>
                   <span className="text-xs text-muted-foreground">{roleTotal} total</span>
                 </button>
+
+                {/* Par coverage strip (always visible — even when collapsed) */}
+                {coverageByRole[role.id] && (
+                  <div className="flex flex-wrap items-center gap-1.5 px-4 py-2 border-t border-border/40 bg-background">
+                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground mr-0.5">Par</span>
+                    {coverageByRole[role.id].map((c, i) => (
+                      <span
+                        key={i}
+                        className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[11px] tabular-nums', coverageClasses(c.status))}
+                        title={c.status === 'short' ? 'Understaffed' : c.status === 'over' ? 'Overstaffed' : 'Met'}
+                      >
+                        {format(c.start, 'h:mm a')}–{format(c.end, 'h:mm a')} · {c.min}/{c.required}
+                      </span>
+                    ))}
+                  </div>
+                )}
 
                 {/* Timeslot rows */}
                 {!isCollapsed && allTimes.map(time => {

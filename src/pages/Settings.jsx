@@ -27,6 +27,7 @@ const SETTING_KEYS = [
   { key: 'default_shift_hours', label: 'Default Shift Length (hours)', type: 'text', placeholder: '8', tab: 'rules', description: 'New shifts end this many hours after their start time. Individual roles can override this (Roles page).' },
   { key: 'overtime_threshold_hours', label: 'OT Warning Threshold (hours/week)', type: 'text', placeholder: '40', tab: 'rules' },
   { key: 'max_consecutive_days', label: 'Max Consecutive Days', type: 'text', placeholder: '6', tab: 'rules' },
+  { key: 'min_rest_hours', label: 'Minimum Rest Between Shifts (hours)', type: 'text', placeholder: '8', tab: 'rules', description: 'When filling a shift, flags anyone whose gap to another shift is under this many hours (e.g. closing then opening).' },
   { key: 'open_shift_auto_approve', label: 'Auto-Approve Open Shift Claims', type: 'toggle', tab: 'rules' },
   { key: 'giveaway_max_hours_per_day', label: 'Block Giveaway if Recipient Exceeds (hours/day)', type: 'text', placeholder: 'e.g. 10 (leave blank to disable)', tab: 'rules' },
   { key: 'giveaway_max_hours_per_week', label: 'Block Giveaway if Recipient Exceeds (hours/week)', type: 'text', placeholder: 'e.g. 40 (leave blank to disable)', tab: 'rules' },

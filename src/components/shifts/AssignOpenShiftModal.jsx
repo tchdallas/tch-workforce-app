@@ -1,28 +1,56 @@
-﻿import React, { useState } from 'react';
-import { formatEndTime } from '@/lib/utils';
+import React, { useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { base44 } from '@/api/base44Client';
+import { formatEndTime, businessDayOf } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import TeamMemberCombobox from '@/components/common/TeamMemberCombobox';
 import { Badge } from '@/components/ui/badge';
 import { Clock, MapPin, Shield } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, addDays } from 'date-fns';
+import { useAllAvailability, useApprovedTimeOff, restGapHours, businessDayStartHour } from '@/lib/useAppData';
+import { annotateAndSort, buildLookups } from '@/lib/scheduleAvailability';
 
 export default function AssignOpenShiftModal({ open, onClose, shift, role, location, teamMembers, onAssign }) {
   const [selectedMemberId, setSelectedMemberId] = useState('');
   const [saving, setSaving] = useState(false);
 
-  if (!shift) return null;
-
-  // Filter: active members who have this role and location assigned
-  const eligible = teamMembers.filter(tm => {
-    if (tm.status !== 'active') return false;
-    if (!tm.assignedRoleIds?.includes(shift.roleId)) return false;
-    const hasLoc =
-      tm.homeLocationId === shift.locationId ||
-      tm.assignedLocationIds?.includes(shift.locationId);
-    return hasLoc;
+  const { data: settings = [] } = useQuery({
+    queryKey: ['app-settings'], queryFn: () => base44.entities.AppSetting.list(), placeholderData: [],
   });
+  const { data: availabilityAll = [] } = useAllAvailability();
+  const { data: approvedTimeOff = [] } = useApprovedTimeOff();
+  const dayKey = shift?.startDateTime ? shift.startDateTime.slice(0, 10) : null;
+  const { data: conflictShifts = [] } = useQuery({
+    queryKey: ['assign-conflict-shifts', dayKey],
+    queryFn: () => {
+      const d = new Date(dayKey + 'T00:00:00');
+      return base44.entities.Shift.filter({
+        startDateTime: { $gte: format(addDays(d, -1), "yyyy-MM-dd'T'00:00:00"), $lt: format(addDays(d, 2), "yyyy-MM-dd'T'00:00:00") },
+        status: { $ne: 'cancelled' },
+      });
+    },
+    enabled: !!dayKey, placeholderData: [],
+  });
+
+  const { orderedMembers, statusById } = useMemo(() => {
+    if (!shift) return { orderedMembers: [], statusById: null };
+    const eligible = teamMembers.filter(tm =>
+      tm.status === 'active' && tm.assignedRoleIds?.includes(shift.roleId) &&
+      (tm.homeLocationId === shift.locationId || tm.assignedLocationIds?.includes(shift.locationId)));
+    const dayStartHour = businessDayStartHour(settings, shift.locationId);
+    const dayOfWeek = new Date(businessDayOf(shift.startDateTime, dayStartHour) + 'T00:00:00').getDay();
+    const lookups = buildLookups({ availability: availabilityAll, timeOff: approvedTimeOff, shifts: conflictShifts });
+    const { ordered, statusById } = annotateAndSort(
+      eligible,
+      { start: new Date(shift.startDateTime), end: new Date(shift.endDateTime), dayOfWeek, excludeShiftId: shift.id },
+      { ...lookups, restGapMs: restGapHours(settings, shift.locationId) * 3600000, locationNameById: {} }
+    );
+    return { orderedMembers: ordered, statusById };
+  }, [shift, teamMembers, settings, availabilityAll, approvedTimeOff, conflictShifts]);
+
+  if (!shift) return null;
 
   const handleAssign = async () => {
     if (!selectedMemberId) return;
@@ -73,10 +101,11 @@ export default function AssignOpenShiftModal({ open, onClose, shift, role, locat
           <TeamMemberCombobox
             value={selectedMemberId}
             onChange={setSelectedMemberId}
-            eligibleTeamMembers={eligible}
+            eligibleTeamMembers={orderedMembers}
+            statusFor={statusById ? (id) => statusById.get(id) : undefined}
             placeholder="Search team member…"
           />
-          {eligible.length === 0 && (
+          {orderedMembers.length === 0 && (
             <p className="text-xs text-muted-foreground">No active members match this role and location.</p>
           )}
         </div>

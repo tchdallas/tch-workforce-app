@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Loader2 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Plus, Loader2, Repeat } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -17,11 +18,13 @@ const statusColors = {
   denied: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
   cancelled: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
 };
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const emptyForm = { recurrence: 'one_time', startDateTime: '', endDateTime: '', weekday: '1', reason: '', note: '' };
 
 export default function TimeOffForm({ memberId }) {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ startDateTime: '', endDateTime: '', reason: '', note: '' });
+  const [form, setForm] = useState(emptyForm);
 
   const { data: requests = [] } = useQuery({
     queryKey: ['my-timeoff', memberId],
@@ -36,7 +39,7 @@ export default function TimeOffForm({ memberId }) {
       queryClient.invalidateQueries({ queryKey: ['my-timeoff', memberId] });
       toast.success('Time off request submitted');
       setShowForm(false);
-      setForm({ startDateTime: '', endDateTime: '', reason: '', note: '' });
+      setForm(emptyForm);
     },
   });
 
@@ -46,11 +49,15 @@ export default function TimeOffForm({ memberId }) {
   });
 
   const handleSubmit = () => {
-    if (!form.startDateTime || !form.endDateTime) return toast.error('Please select dates');
+    const isWeekly = form.recurrence === 'weekly';
+    if (!form.startDateTime) return toast.error(isWeekly ? 'Pick a start date' : 'Please select dates');
+    if (!isWeekly && !form.endDateTime) return toast.error('Please select an end date');
     submitMutation.mutate({
       teamMemberId: memberId,
+      recurrence: form.recurrence,
+      weekday: isWeekly ? Number(form.weekday) : null,
       startDateTime: new Date(form.startDateTime).toISOString(),
-      endDateTime: new Date(form.endDateTime).toISOString(),
+      endDateTime: form.endDateTime ? new Date(form.endDateTime).toISOString() : null,
       isFullDay: true,
       reason: form.reason,
       note: form.note,
@@ -70,26 +77,61 @@ export default function TimeOffForm({ memberId }) {
         <Card>
           <CardContent className="p-4 space-y-3">
             <p className="text-sm font-semibold">New Time Off Request</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">Start Date</Label>
-                <Input type="date" value={form.startDateTime} onChange={e => setForm(f => ({ ...f, startDateTime: e.target.value }))} />
-              </div>
-              <div>
-                <Label className="text-xs">End Date</Label>
-                <Input type="date" value={form.endDateTime} onChange={e => setForm(f => ({ ...f, endDateTime: e.target.value }))} />
-              </div>
+
+            <div>
+              <Label className="text-xs">Type</Label>
+              <Select value={form.recurrence} onValueChange={v => setForm(f => ({ ...f, recurrence: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="one_time">Specific dates</SelectItem>
+                  <SelectItem value="weekly">Repeats weekly (e.g. every Monday)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+
+            {form.recurrence === 'weekly' ? (
+              <>
+                <div>
+                  <Label className="text-xs">Day of the week</Label>
+                  <Select value={form.weekday} onValueChange={v => setForm(f => ({ ...f, weekday: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{DAYS.map((d, i) => <SelectItem key={d} value={String(i)}>Every {d}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">Starting</Label>
+                    <Input type="date" value={form.startDateTime} onChange={e => setForm(f => ({ ...f, startDateTime: e.target.value }))} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Until <span className="text-muted-foreground">(blank = ongoing)</span></Label>
+                    <Input type="date" value={form.endDateTime} onChange={e => setForm(f => ({ ...f, endDateTime: e.target.value }))} />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Start Date</Label>
+                  <Input type="date" value={form.startDateTime} onChange={e => setForm(f => ({ ...f, startDateTime: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">End Date</Label>
+                  <Input type="date" value={form.endDateTime} onChange={e => setForm(f => ({ ...f, endDateTime: e.target.value }))} />
+                </div>
+              </div>
+            )}
+
             <div>
               <Label className="text-xs">Reason</Label>
-              <Input value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} placeholder="Vacation, personal, etc." />
+              <Input value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} placeholder="Vacation, school, personal, etc." />
             </div>
             <div>
               <Label className="text-xs">Additional Note</Label>
               <Input value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} placeholder="Optional details" />
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => setShowForm(false)}>Cancel</Button>
+              <Button variant="outline" className="flex-1" onClick={() => { setShowForm(false); setForm(emptyForm); }}>Cancel</Button>
               <Button className="flex-1" onClick={handleSubmit} disabled={submitMutation.isPending}>
                 {submitMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Submit'}
               </Button>
@@ -106,8 +148,14 @@ export default function TimeOffForm({ memberId }) {
           <Card key={req.id}>
             <CardContent className="p-3 flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-sm font-medium">
-                  {format(new Date(req.startDateTime), 'MMM d')} – {format(new Date(req.endDateTime), 'MMM d, yyyy')}
+                <p className="text-sm font-medium flex items-center gap-1.5">
+                  {req.recurrence === 'weekly' ? (
+                    <><Repeat className="w-3 h-3 text-muted-foreground shrink-0" />
+                      Every {DAYS[req.weekday]}
+                      {req.endDateTime ? ` · until ${format(new Date(req.endDateTime), 'MMM d, yyyy')}` : ' · ongoing'}</>
+                  ) : (
+                    <>{format(new Date(req.startDateTime), 'MMM d')} – {req.endDateTime ? format(new Date(req.endDateTime), 'MMM d, yyyy') : '—'}</>
+                  )}
                 </p>
                 {req.reason && <p className="text-xs text-muted-foreground truncate">{req.reason}</p>}
               </div>

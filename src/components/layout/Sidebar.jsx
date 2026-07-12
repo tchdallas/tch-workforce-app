@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Calendar, Radio, Users, MapPin, Shield, BarChart3,
   Settings, Bell, ClipboardList, AlertTriangle, HandHelping, ChevronLeft, ChevronRight,
-  Activity, User, LayoutTemplate, CalendarCheck, Clock, LogOut
+  Activity, User, LayoutTemplate, CalendarCheck, Clock, LogOut, Target
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,7 @@ const allNavItems = [
   { label: 'Team Members', icon: Users, path: '/team-members', managerOnly: true },
   { label: 'Locations', icon: MapPin, path: '/locations', managerOnly: true },
   { label: 'Roles', icon: Shield, path: '/roles', managerOnly: true },
+  { label: 'Par Levels', icon: Target, path: '/par-levels', adminOnly: true },
   { label: 'Timesheets', icon: Clock, path: '/timesheets', managerOnly: true },
   { label: 'Reports', icon: BarChart3, path: '/reports', managerOnly: true },
   { label: 'Notifications', icon: Bell, path: '/notifications', managerOnly: false },
