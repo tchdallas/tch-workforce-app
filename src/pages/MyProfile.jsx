@@ -12,8 +12,9 @@ import AvailabilityForm from '@/components/profile/AvailabilityForm';
 import ChangePasswordCard from '@/components/profile/ChangePasswordCard';
 import MyDocumentsTab from '@/components/discipline/MyDocumentsTab';
 import MemberDownsView from '@/components/downs/MemberDownsView';
+import NotificationPreferencesForm from '@/components/profile/NotificationPreferencesForm';
 import { toast } from 'sonner';
-import { User, CalendarOff, Clock, LogOut, FileText, Trophy } from 'lucide-react';
+import { User, CalendarOff, Clock, LogOut, FileText, Trophy, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/AuthContext';
 
@@ -23,7 +24,7 @@ export default function MyProfile() {
   const { logout } = useAuth();
   // deep-link support: /my-profile?tab=documents (used by dashboard action items)
   const [searchParams] = useSearchParams();
-  const initialTab = ['info', 'timeoff', 'availability', 'documents', 'downs'].includes(searchParams.get('tab'))
+  const initialTab = ['info', 'timeoff', 'availability', 'documents', 'downs', 'notifications'].includes(searchParams.get('tab'))
     ? searchParams.get('tab') : 'info';
 
   const updateMutation = useMutation({
@@ -66,6 +67,9 @@ export default function MyProfile() {
           <TabsTrigger value="downs" className="flex-1 gap-1.5 text-xs">
             <Trophy className="w-3.5 h-3.5" /> Downs
           </TabsTrigger>
+          <TabsTrigger value="notifications" className="flex-1 gap-1.5 text-xs">
+            <Bell className="w-3.5 h-3.5" /> Alerts
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="info" className="mt-4">
@@ -87,6 +91,10 @@ export default function MyProfile() {
 
         <TabsContent value="downs" className="mt-4">
           <MemberDownsView memberId={member.id} homeLocationId={member.homeLocationId} self />
+        </TabsContent>
+
+        <TabsContent value="notifications" className="mt-4">
+          <NotificationPreferencesForm memberId={member.id} />
         </TabsContent>
       </Tabs>
 
