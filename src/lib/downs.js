@@ -34,3 +34,16 @@ export function isoDate(d) {
 export function inSamePayPeriod(a, b) {
   return payPeriodFor(a).start.getTime() === payPeriodFor(b).start.getTime();
 }
+
+// the current pay period plus the previous `n` — for a close-out picker
+export function recentPayPeriods(n = 6) {
+  const out = [];
+  const now = payPeriodFor(new Date());
+  for (let i = 0; i < n; i++) {
+    const ref = new Date(now.start);
+    ref.setDate(ref.getDate() - i * PERIOD_DAYS);
+    const { start, end } = payPeriodFor(ref);
+    out.push({ start, end, startIso: isoDate(start), endIso: isoDate(end), label: payPeriodLabel(start) });
+  }
+  return out;
+}

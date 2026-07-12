@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/api/supabase';
+import { base44 } from '@/api/base44Client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { payPeriodFor, payPeriodLabel, isoDate } from '@/lib/downs';
@@ -19,6 +20,7 @@ async function fetchMemberDowns(memberId) {
       durationMinutes: d.duration_minutes,
       cardDate: d.down_cards?.card_date,
       tableNumber: d.down_cards?.table_number,
+      locationId: d.down_cards?.location_id,
       tournamentName: d.down_cards?.tournaments?.name || 'Tournament',
     }))
     .sort((a, b) => (b.cardDate || '').localeCompare(a.cardDate || ''));
@@ -30,6 +32,23 @@ export default function MemberDownsView({ memberId }) {
     enabled: !!memberId,
     queryFn: () => fetchMemberDowns(memberId),
   });
+  const { data: settlements = [] } = useQuery({
+    queryKey: ['down-pay-periods'],
+    queryFn: () => base44.entities.DownPayPeriod.list('-period_start'),
+    placeholderData: [],
+  });
+
+  // the settled rate for a down (a closed period covering its date + location)
+  const rateForDown = (d) => {
+    const s = settlements.find(x =>
+      d.cardDate >= x.periodStart && d.cardDate <= x.periodEnd &&
+      (x.locationIds || []).includes(d.locationId));
+    return s ? Number(s.rate) : 0;
+  };
+  const lifetimeEarned = useMemo(
+    () => downs.reduce((a, d) => a + rateForDown(d), 0),
+    [downs, settlements]
+  );
 
   const period = payPeriodFor(new Date());
   const currentCount = useMemo(
@@ -53,7 +72,7 @@ export default function MemberDownsView({ memberId }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
+      <div className={`grid gap-3 ${lifetimeEarned > 0 ? 'grid-cols-3' : 'grid-cols-2'}`}>
         <Card className="p-4">
           <p className="text-xs text-muted-foreground">This pay period</p>
           <p className="text-2xl font-bold text-primary mt-1">{currentCount}</p>
@@ -63,6 +82,12 @@ export default function MemberDownsView({ memberId }) {
           <p className="text-xs text-muted-foreground">Lifetime downs</p>
           <p className="text-2xl font-bold mt-1">{downs.length}</p>
         </Card>
+        {lifetimeEarned > 0 && (
+          <Card className="p-4">
+            <p className="text-xs text-muted-foreground">Earned (settled)</p>
+            <p className="text-2xl font-bold text-emerald-600 mt-1">${lifetimeEarned.toFixed(2)}</p>
+          </Card>
+        )}
       </div>
 
       {downs.length === 0 ? (
@@ -72,11 +97,16 @@ export default function MemberDownsView({ memberId }) {
         </div>
       ) : (
         <div className="space-y-4">
-          {groups.map(g => (
+          {groups.map(g => {
+            const earned = g.items.reduce((a, d) => a + rateForDown(d), 0);
+            return (
             <div key={g.start}>
               <div className="flex items-center justify-between mb-1.5">
                 <p className="text-xs font-semibold text-muted-foreground">{g.label}</p>
-                <Badge variant="outline" className="text-[10px]">{g.items.length} down{g.items.length !== 1 ? 's' : ''}</Badge>
+                <div className="flex items-center gap-1.5">
+                  <Badge variant="outline" className="text-[10px]">{g.items.length} down{g.items.length !== 1 ? 's' : ''}</Badge>
+                  {earned > 0 && <Badge className="text-[10px] bg-emerald-600">${earned.toFixed(2)}</Badge>}
+                </div>
               </div>
               <Card>
                 <CardContent className="p-0 divide-y divide-border/50">
@@ -93,7 +123,8 @@ export default function MemberDownsView({ memberId }) {
                 </CardContent>
               </Card>
             </div>
-          ))}
+          );
+          })}
         </div>
       )}
     </div>

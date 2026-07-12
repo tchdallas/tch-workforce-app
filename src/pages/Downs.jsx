@@ -12,6 +12,8 @@ import { Plus, Image as ImageIcon, Trophy } from 'lucide-react';
 import { format } from 'date-fns';
 import NewDownCardModal from '@/components/downs/NewDownCardModal';
 import DownCardDetailModal from '@/components/downs/DownCardDetailModal';
+import ClosePayPeriodModal from '@/components/downs/ClosePayPeriodModal';
+import { DollarSign } from 'lucide-react';
 
 // down cards with tournament name + downs/photo counts, most recent first
 async function fetchCards() {
@@ -34,8 +36,15 @@ async function fetchCards() {
 
 export default function Downs() {
   const [modalOpen, setModalOpen] = useState(false);
+  const [closeOpen, setCloseOpen] = useState(false);
   const [detailCardId, setDetailCardId] = useState(null);
   const { data: locations = [] } = useLocations();
+
+  const { data: settlements = [] } = useQuery({
+    queryKey: ['down-pay-periods'],
+    queryFn: () => base44.entities.DownPayPeriod.list('-period_start'),
+    placeholderData: [],
+  });
 
   const { data: tournaments = [] } = useQuery({
     queryKey: ['tournaments'],
@@ -68,6 +77,9 @@ export default function Downs() {
   return (
     <div className="max-w-4xl mx-auto">
       <PageHeader title="Tournament Downs" subtitle="Log down cards and track dealer downs">
+        <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setCloseOpen(true)}>
+          <DollarSign className="w-4 h-4" /> Close pay period
+        </Button>
         <Button size="sm" className="gap-1.5" onClick={() => setModalOpen(true)}>
           <Plus className="w-4 h-4" /> New Down Card
         </Button>
@@ -95,6 +107,28 @@ export default function Downs() {
           )}
         </CardContent>
       </Card>
+
+      {/* closed pay periods */}
+      {settlements.length > 0 && (
+        <div className="mb-5">
+          <h2 className="text-sm font-semibold mb-2">Closed pay periods</h2>
+          <div className="space-y-2">
+            {settlements.map(s => (
+              <Card key={s.id} className="p-3 flex items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">
+                    {format(new Date(s.periodStart + 'T00:00:00'), 'MMM d')} – {format(new Date(s.periodEnd + 'T00:00:00'), 'MMM d, yyyy')}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {(s.locationIds || []).map(locName).join(', ')} · {s.totalDowns} downs · pool ${Number(s.poolAmount).toLocaleString()}
+                  </p>
+                </div>
+                <Badge className="shrink-0 bg-emerald-600">${Number(s.rate).toFixed(2)}/down</Badge>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* recent down cards */}
       <h2 className="text-sm font-semibold mb-2">Recent down cards</h2>
@@ -138,6 +172,13 @@ export default function Downs() {
         onClose={() => setDetailCardId(null)}
         onChanged={() => setDetailCardId(null)}
         locationName={locName(cards.find(c => c.id === detailCardId)?.locationId)}
+      />
+
+      <ClosePayPeriodModal
+        open={closeOpen}
+        onClose={() => setCloseOpen(false)}
+        onSaved={() => setCloseOpen(false)}
+        locations={locations}
       />
     </div>
   );
