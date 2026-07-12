@@ -73,7 +73,7 @@ export default function MyProfile() {
         </TabsContent>
 
         <TabsContent value="downs" className="mt-4">
-          <MemberDownsView memberId={member.id} />
+          <MemberDownsView memberId={member.id} homeLocationId={member.homeLocationId} self />
         </TabsContent>
       </Tabs>
 

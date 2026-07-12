@@ -1,12 +1,14 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/api/supabase';
 import { base44 } from '@/api/base44Client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { payPeriodFor, payPeriodLabel, isoDate } from '@/lib/downs';
 import { format } from 'date-fns';
-import { Trophy } from 'lucide-react';
+import { Trophy, Flag } from 'lucide-react';
+import RaiseDisputeDialog from '@/components/downs/RaiseDisputeDialog';
 
 async function fetchMemberDowns(memberId) {
   const { data, error } = await supabase
@@ -26,11 +28,18 @@ async function fetchMemberDowns(memberId) {
     .sort((a, b) => (b.cardDate || '').localeCompare(a.cardDate || ''));
 }
 
-export default function MemberDownsView({ memberId }) {
+export default function MemberDownsView({ memberId, homeLocationId, self = false }) {
+  const [disputeOpen, setDisputeOpen] = useState(false);
   const { data: downs = [], isLoading } = useQuery({
     queryKey: ['member-downs', memberId],
     enabled: !!memberId,
     queryFn: () => fetchMemberDowns(memberId),
+  });
+  const { data: myDisputes = [] } = useQuery({
+    queryKey: ['my-disputes', memberId],
+    enabled: !!memberId && self,
+    queryFn: () => base44.entities.DownDispute.filter({ teamMemberId: memberId }, '-created_date'),
+    placeholderData: [],
   });
   const { data: settlements = [] } = useQuery({
     queryKey: ['down-pay-periods'],
@@ -90,6 +99,22 @@ export default function MemberDownsView({ memberId }) {
         )}
       </div>
 
+      {self && (
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap gap-1.5">
+            {myDisputes.filter(d => d.status === 'open').map(d => (
+              <Badge key={d.id} variant="outline" className="text-[10px] border-amber-300 text-amber-700">Dispute pending</Badge>
+            ))}
+            {myDisputes.filter(d => d.status === 'resolved').slice(0, 1).map(d => (
+              <Badge key={d.id} variant="outline" className="text-[10px] border-emerald-300 text-emerald-700">Dispute resolved</Badge>
+            ))}
+          </div>
+          <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={() => setDisputeOpen(true)}>
+            <Flag className="w-3.5 h-3.5" /> Report a problem
+          </Button>
+        </div>
+      )}
+
       {downs.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <Trophy className="w-8 h-8 mx-auto mb-2 opacity-30" />
@@ -126,6 +151,15 @@ export default function MemberDownsView({ memberId }) {
           );
           })}
         </div>
+      )}
+
+      {self && (
+        <RaiseDisputeDialog
+          open={disputeOpen}
+          onClose={() => setDisputeOpen(false)}
+          memberId={memberId}
+          locationId={downs[0]?.locationId || homeLocationId}
+        />
       )}
     </div>
   );

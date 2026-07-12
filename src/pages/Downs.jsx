@@ -1,8 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { supabase } from '@/api/supabase';
-import { useLocations } from '@/lib/useAppData';
+import { useLocations, useTeamMembers } from '@/lib/useAppData';
+import { useCurrentMember } from '@/hooks/useCurrentMember';
+import { toast } from 'sonner';
+import { Flag } from 'lucide-react';
 import { payPeriodFor, payPeriodLabel, isoDate } from '@/lib/downs';
 import PageHeader from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -40,11 +43,32 @@ export default function Downs() {
   const [detailCardId, setDetailCardId] = useState(null);
   const { data: locations = [] } = useLocations();
 
+  const { member } = useCurrentMember();
+  const { data: teamMembers = [] } = useTeamMembers();
+  const qc = useQueryClient();
+
   const { data: settlements = [] } = useQuery({
     queryKey: ['down-pay-periods'],
     queryFn: () => base44.entities.DownPayPeriod.list('-period_start'),
     placeholderData: [],
   });
+  const { data: openDisputes = [] } = useQuery({
+    queryKey: ['open-disputes'],
+    queryFn: () => base44.entities.DownDispute.filter({ status: 'open' }, '-created_date'),
+    placeholderData: [],
+  });
+
+  const memberName = (id) => {
+    const m = teamMembers.find(t => t.id === id);
+    return m ? `${m.preferredName || m.firstName} ${m.lastName}` : 'A team member';
+  };
+  const resolveDispute = async (id) => {
+    try {
+      await base44.entities.DownDispute.update(id, { status: 'resolved', resolvedBy: member?.id, resolvedAt: new Date().toISOString() });
+      toast.success('Dispute resolved');
+      qc.invalidateQueries({ queryKey: ['open-disputes'] });
+    } catch (e) { toast.error(e.message || 'Could not resolve'); }
+  };
 
   const { data: tournaments = [] } = useQuery({
     queryKey: ['tournaments'],
@@ -107,6 +131,30 @@ export default function Downs() {
           )}
         </CardContent>
       </Card>
+
+      {/* open disputes */}
+      {openDisputes.length > 0 && (
+        <div className="mb-5">
+          <h2 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
+            <Flag className="w-4 h-4 text-amber-600" /> Open disputes
+            <Badge variant="secondary">{openDisputes.length}</Badge>
+          </h2>
+          <div className="space-y-2">
+            {openDisputes.map(d => (
+              <Card key={d.id} className="p-3 border-amber-300/60">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{memberName(d.teamMemberId)}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5 whitespace-pre-wrap break-words">{d.message}</p>
+                    <p className="text-[10px] text-muted-foreground mt-1">{d.created_date ? format(new Date(d.created_date), 'MMM d, h:mm a') : ''}</p>
+                  </div>
+                  <Button size="sm" variant="outline" className="shrink-0" onClick={() => resolveDispute(d.id)}>Resolve</Button>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* closed pay periods */}
       {settlements.length > 0 && (

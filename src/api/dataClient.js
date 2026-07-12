@@ -132,6 +132,7 @@ const ENTITIES = {
   Down: { table: 'downs' },
   DownCardPhoto: { table: 'down_card_photos' },
   DownPayPeriod: { table: 'down_pay_periods' },
+  DownDispute: { table: 'down_disputes' },
   // blindWrites: creators of these rows often can't SELECT them back under RLS
   // (a notification belongs to its recipient; audit reads are manager+), so
   // writes skip the RETURNING clause and reads of the result aren't attempted
