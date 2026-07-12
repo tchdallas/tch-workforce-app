@@ -77,7 +77,11 @@ export default function Announcements() {
       )}
 
       <ComposeDialog open={composeOpen} onClose={() => setComposeOpen(false)} isCorp={isCorp}
-        onPosted={() => { qc.invalidateQueries({ queryKey: ['sent-announcements', myId] }); setComposeOpen(false); }} />
+        onPosted={() => {
+          qc.invalidateQueries({ queryKey: ['sent-announcements', myId] });
+          qc.invalidateQueries({ queryKey: ['my-announcements', myId] }); // poster may be a recipient too
+          setComposeOpen(false);
+        }} />
     </div>
   );
 }
