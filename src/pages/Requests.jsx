@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { formatEndTime } from '@/lib/utils';
+import { formatEndTime, cn } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -62,6 +62,11 @@ export default function Requests() {
   const approveTimeOff = useMutation({
     mutationFn: ({ id, status }) => base44.entities.TimeOffRequest.update(id, { status, reviewedAt: new Date().toISOString() }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['all-timeoff'] }); toast.success('Updated'); },
+  });
+
+  const setTimeOffPayType = useMutation({
+    mutationFn: ({ id, payType }) => base44.entities.TimeOffRequest.update(id, { payType }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['all-timeoff'] }); },
   });
 
   const approveTrade = useMutation({
@@ -283,6 +288,23 @@ export default function Requests() {
                     {req.reason && <p className="text-xs text-muted-foreground mt-0.5">{req.reason}</p>}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
+                    {req.status === 'pending' ? (
+                      <button
+                        type="button"
+                        title="Click to toggle paid / unpaid"
+                        onClick={() => setTimeOffPayType.mutate({ id: req.id, payType: req.payType === 'paid' ? 'unpaid' : 'paid' })}
+                        className={cn(
+                          'text-[10px] font-medium px-2 py-0.5 rounded-full border transition-colors',
+                          req.payType === 'paid'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400'
+                            : 'bg-muted text-muted-foreground border-border'
+                        )}
+                      >
+                        {req.payType === 'paid' ? 'PTO' : 'Unpaid'}
+                      </button>
+                    ) : (
+                      <Badge variant="outline" className="text-[10px]">{req.payType === 'paid' ? 'PTO' : 'Unpaid'}</Badge>
+                    )}
                     {statusBadge(req.status)}
                     {req.status === 'pending' && (
                       <>
