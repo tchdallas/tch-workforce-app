@@ -15,6 +15,7 @@ import {
 import PageHeader from '@/components/common/PageHeader';
 import StatCard from '@/components/common/StatCard';
 import ActionItems from '@/components/dashboard/ActionItems';
+import AnnouncementBanner from '@/components/common/AnnouncementBanner';
 import LocationSelector from '@/components/common/LocationSelector';
 import { useLocationFilter } from '@/hooks/useLocationFilter';
 import { useTeamMembers } from '@/lib/useAppData';
@@ -104,6 +105,7 @@ export default function Dashboard() {
         <PullToRefreshIndicator pullDistance={pullDistance} refreshing={refreshing} />
         <PageHeader title="Dashboard" subtitle={format(today, 'EEEE, MMMM d, yyyy')} />
 
+        <AnnouncementBanner />
         <ActionItems showEmpty />
 
         <div className="grid grid-cols-2 gap-3 mb-6">
@@ -194,6 +196,7 @@ export default function Dashboard() {
         </Link>
       </PageHeader>
 
+      <AnnouncementBanner />
       {/* managers get points and documents too — show only when something's pending */}
       <ActionItems />
 
