@@ -8,6 +8,7 @@ import { AlertTriangle } from 'lucide-react';
 import PageHeader from '@/components/common/PageHeader';
 import LocationSelector from '@/components/common/LocationSelector';
 import WeekSelector from '@/components/schedule/WeekSelector';
+import TurnoverReport from '@/components/reports/TurnoverReport';
 import { useLocationFilter } from '@/hooks/useLocationFilter';
 import { useLocations, useRoles, useTeamMembers } from '@/lib/useAppData';
 import { startOfWeek, endOfWeek, format, differenceInHours } from 'date-fns';
@@ -157,6 +158,7 @@ export default function Reports() {
           <TabsTrigger value="hours" className="text-xs">By Location</TabsTrigger>
           <TabsTrigger value="roles" className="text-xs">By Role</TabsTrigger>
           <TabsTrigger value="crosslocation" className="text-xs">Cross-Location</TabsTrigger>
+          <TabsTrigger value="turnover" className="text-xs">Turnover</TabsTrigger>
         </TabsList>
 
         <TabsContent value="hours">
@@ -238,6 +240,10 @@ export default function Reports() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="turnover">
+          <TurnoverReport locations={locations || []} activeHeadcount={teamMembers?.length || 0} />
         </TabsContent>
       </Tabs>
     </div>

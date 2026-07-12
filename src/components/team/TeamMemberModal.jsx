@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AvailabilityForm from '@/components/profile/AvailabilityForm';
 import MemberFileTab from '@/components/discipline/MemberFileTab';
+import { Switch } from '@/components/ui/switch';
+import { TERMINATION_CATEGORIES, TERMINATION_REASONS } from '@/lib/termination';
 
 const defaultMember = {
   tmNumber: '', firstName: '', lastName: '', preferredName: '', email: '', phone: '',
@@ -39,7 +41,21 @@ export default function TeamMemberModal({ open, onClose, member, locations, role
       }
     }
     setTmNumberError('');
-    onSave(form);
+    const payload = { ...form };
+    if (payload.status === 'archived') {
+      // stamp the termination time on the first archive; keep it on re-save
+      if (member?.status !== 'archived' && !payload.terminatedAt) {
+        payload.terminatedAt = new Date().toISOString();
+      }
+    } else {
+      // reactivated / restored — clear the termination record
+      payload.terminatedAt = null;
+      payload.terminationCategory = null;
+      payload.terminationReason = null;
+      payload.rehireEligible = null;
+      payload.terminationNote = null;
+    }
+    onSave(payload);
   };
 
   const toggleArrayItem = (key, value) => {
@@ -124,12 +140,60 @@ export default function TeamMemberModal({ open, onClose, member, locations, role
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="invited">Invited</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                    <SelectItem value="archived">Archived</SelectItem>
+                    <SelectItem value="inactive">Suspended</SelectItem>
+                    <SelectItem value="archived">Termed</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+
+              {form.status === 'archived' && (
+                <div className="rounded-md border border-border p-3 space-y-3 bg-muted/30">
+                  <p className="text-xs font-medium">Termination details <span className="text-muted-foreground font-normal">(for turnover reporting)</span></p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs">Type</Label>
+                      <Select
+                        value={form.terminationCategory || ''}
+                        onValueChange={v => setForm(f => ({ ...f, terminationCategory: v, terminationReason: '' }))}
+                      >
+                        <SelectTrigger><SelectValue placeholder="Voluntary / Involuntary" /></SelectTrigger>
+                        <SelectContent>
+                          {TERMINATION_CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Reason</Label>
+                      <Select
+                        value={form.terminationReason || ''}
+                        onValueChange={v => setForm(f => ({ ...f, terminationReason: v }))}
+                        disabled={!form.terminationCategory}
+                      >
+                        <SelectTrigger><SelectValue placeholder={form.terminationCategory ? 'Select reason' : 'Pick a type first'} /></SelectTrigger>
+                        <SelectContent>
+                          {(TERMINATION_REASONS[form.terminationCategory] || []).map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs">Eligible for rehire</Label>
+                    <Switch
+                      checked={form.rehireEligible === true}
+                      onCheckedChange={v => setForm(f => ({ ...f, rehireEligible: v }))}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Note (optional)</Label>
+                    <Textarea
+                      rows={2}
+                      value={form.terminationNote || ''}
+                      onChange={e => setForm(f => ({ ...f, terminationNote: e.target.value }))}
+                      placeholder="Any context for the record"
+                    />
+                  </div>
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="assignments" className="space-y-4 mt-0">

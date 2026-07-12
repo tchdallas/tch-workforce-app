@@ -43,7 +43,9 @@ export const AuthProvider = ({ children }) => {
         setIsAuthenticated(false);
         setAuthError({
           type: 'user_not_registered',
-          message: 'Your access to this app has been revoked.',
+          message: member.status === 'inactive'
+            ? 'Your account has been suspended. Please contact your manager.'
+            : 'Your access to this app has ended.',
           email: session.user.email,
         });
       } else {
