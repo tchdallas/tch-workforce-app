@@ -23,10 +23,16 @@ import { toast } from 'sonner';
 
 const statusColors = {
   active: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
-  invited: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
   inactive: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
   archived: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
 };
+
+// display labels (db keeps active/inactive/archived; these are what users see)
+const statusLabels = { active: 'Active', inactive: 'Suspended', archived: 'Termed' };
+
+// blue "Invited" pill shown alongside for active members who haven't logged in
+// yet (no linked auth account), until they accept the invite / sign in
+const invitedPill = 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
 
 export default function TeamMembers() {
   const queryClient = useQueryClient();
@@ -334,9 +340,16 @@ export default function TeamMembers() {
                     <p className="text-[11px] text-muted-foreground">{tm.firstName} {tm.lastName}</p>
                   )}
                 </div>
-                <Badge className={cn("text-[10px] border-0", statusColors[tm.status])}>
-                  {tm.status}
-                </Badge>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {tm.status === 'active' && !tm.userId && (
+                    <Badge className={cn("text-[10px] border-0", invitedPill)} title="Hasn't accepted the invite / logged in yet">
+                      Invited
+                    </Badge>
+                  )}
+                  <Badge className={cn("text-[10px] border-0", statusColors[tm.status])}>
+                    {statusLabels[tm.status] || tm.status}
+                  </Badge>
+                </div>
               </div>
               <div className="space-y-1">
                 {tm.email && (

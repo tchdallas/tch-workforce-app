@@ -136,9 +136,8 @@ export default function TeamMemberModal({ open, onClose, member, locations, role
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="invited">Invited</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                    <SelectItem value="archived">Archived</SelectItem>
+                    <SelectItem value="inactive">Suspended</SelectItem>
+                    <SelectItem value="archived">Termed</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
