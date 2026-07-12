@@ -20,7 +20,7 @@ import DayViewSummary from '@/components/schedule/DayViewSummary';
 import DayTimeline from '@/components/schedule/DayTimeline';
 import ImportTemplateModal from '@/components/schedule/ImportTemplateModal';
 import TeamMemberModal from '@/components/team/TeamMemberModal';
-import { useLocations, useRoles, useTeamMembers, usePars, useParTemplates, businessDayStartHour } from '@/lib/useAppData';
+import { useLocations, useRoles, useTeamMembers, usePars, useParTemplates, useAllAvailability, businessDayStartHour } from '@/lib/useAppData';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -98,6 +98,14 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
   }, [locParPlans, parPlanId]);
   const planWindows = useMemo(() => allParWindows.filter(p => p.templateId === parPlanId), [allParWindows, parPlanId]);
   const parPlanName = locParPlans.find(t => t.id === parPlanId)?.name;
+
+  // recurring availability, mapped per member, for the subtle grid cue
+  const { data: availabilityAll = [] } = useAllAvailability();
+  const availabilityByMember = useMemo(() => {
+    const m = new Map();
+    availabilityAll.forEach(a => { if (!m.has(a.teamMemberId)) m.set(a.teamMemberId, []); m.get(a.teamMemberId).push(a); });
+    return m;
+  }, [availabilityAll]);
 
   // 24/7: the query window follows the business-day boundary so an overnight
   // week (e.g. day starts 4 AM) includes Sat 1 AM shifts in the prior week
@@ -941,6 +949,7 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
           viewMode={viewMode}
           spanDays={spanDays}
           parWindows={planWindows}
+          availabilityByMember={availabilityByMember}
           onShiftClick={(shift) => setShiftModal({ open: true, shift })}
           onAddShift={handleAddShift}
           selectedLocation={selectedLocation}

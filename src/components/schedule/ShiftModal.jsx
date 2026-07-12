@@ -4,6 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { useAllAvailability, useApprovedTimeOff, restGapHours, businessDayStartHour } from '@/lib/useAppData';
 import { businessDayOf } from '@/lib/utils';
 import { annotateAndSort, buildLookups } from '@/lib/scheduleAvailability';
+import { addDays, format as formatDate } from 'date-fns';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -58,6 +59,26 @@ export default function ShiftModal({ open, onClose, shift, locations, roles, tea
   const { data: availabilityAll = [] } = useAllAvailability();
   const { data: approvedTimeOff = [] } = useApprovedTimeOff();
 
+  // Conflict detection uses shifts across ALL locations the viewer can see
+  // (not just the one being scheduled), so a member booked at another location
+  // that night is still caught. Windowed around the shift's day.
+  const conflictDayKey = form.startDateTime ? form.startDateTime.slice(0, 10) : null;
+  const { data: conflictShifts = [] } = useQuery({
+    queryKey: ['picker-conflict-shifts', conflictDayKey],
+    queryFn: () => {
+      const d = new Date(conflictDayKey + 'T00:00:00');
+      return base44.entities.Shift.filter({
+        startDateTime: {
+          $gte: formatDate(addDays(d, -1), "yyyy-MM-dd'T'00:00:00"),
+          $lt: formatDate(addDays(d, 2), "yyyy-MM-dd'T'00:00:00"),
+        },
+        status: { $ne: 'cancelled' },
+      });
+    },
+    enabled: !!conflictDayKey,
+    placeholderData: [],
+  });
+
   // Eligible members (role + location), annotated with availability / conflict
   // status and sorted so recommended people (preferred + available) come first.
   const { orderedMembers, statusById } = useMemo(() => {
@@ -72,7 +93,7 @@ export default function ShiftModal({ open, onClose, shift, locations, roles, tea
     }
     const dayStartHour = businessDayStartHour(settings, form.locationId);
     const dayOfWeek = new Date(businessDayOf(form.startDateTime, dayStartHour) + 'T00:00:00').getDay();
-    const lookups = buildLookups({ availability: availabilityAll, timeOff: approvedTimeOff, shifts });
+    const lookups = buildLookups({ availability: availabilityAll, timeOff: approvedTimeOff, shifts: conflictShifts });
     const locationNameById = Object.fromEntries(locations.map(l => [l.id, l.name]));
     const { ordered, statusById } = annotateAndSort(
       eligible,
@@ -80,7 +101,7 @@ export default function ShiftModal({ open, onClose, shift, locations, roles, tea
       { ...lookups, restGapMs: restGapHours(settings, form.locationId) * 3600000, locationNameById }
     );
     return { orderedMembers: ordered, statusById };
-  }, [teamMembers, form.locationId, form.roleId, form.startDateTime, form.endDateTime, settings, availabilityAll, approvedTimeOff, shifts, locations, shift?.id]);
+  }, [teamMembers, form.locationId, form.roleId, form.startDateTime, form.endDateTime, settings, availabilityAll, approvedTimeOff, conflictShifts, locations, shift?.id]);
   const durationFor = (roleId) => {
     const role = roles.find(r => r.id === roleId);
     const locVal = parseFloat(settings.find(s => s.key === 'default_shift_hours' && s.scope === 'location' && s.locationId === form.locationId)?.value);

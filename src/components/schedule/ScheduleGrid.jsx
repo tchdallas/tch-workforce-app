@@ -8,6 +8,7 @@ import { roleDayCoverage } from '@/lib/parCoverage';
 export default function ScheduleGrid({
   weekStart, shifts, roles, teamMembers, locations, viewMode,
   parWindows = [],
+  availabilityByMember,
   onShiftClick, onAddShift, selectedLocation,
   selectedShiftId, onShiftSelect,
   selectedShiftIds, onShiftMultiSelect,
@@ -194,6 +195,11 @@ export default function ScheduleGrid({
     const dayShifts = getShiftsForDay(day, filterFn);
     const isDragOver = !readOnly && dragOverCell === cellKey;
     const isPasteMode = !readOnly && !!clipboard;
+    // subtle availability cue for member rows: their weekly type for this day
+    const memberAvail = addContext?.teamMemberId && availabilityByMember
+      ? (availabilityByMember.get(addContext.teamMemberId) || []).find(a => a.dayOfWeek === day.getDay())
+      : null;
+    const availType = memberAvail && memberAvail.availabilityType !== 'available' ? memberAvail.availabilityType : null;
 
     return (
       <div
@@ -217,6 +223,12 @@ export default function ScheduleGrid({
           }
         }}
       >
+        {availType && (
+          <span
+            className={cn('absolute top-1 left-1 w-1.5 h-1.5 rounded-full z-10', availType === 'unavailable' ? 'bg-red-400' : 'bg-emerald-400')}
+            title={availType === 'unavailable' ? 'Prefers not to work this day' : 'Prefers this day'}
+          />
+        )}
         <div className="space-y-1">
           {dayShifts.map(shift => (
             <ShiftCard key={shift.id} shift={shift} {...shiftCardProps(shift, visibleShiftIds)} />
