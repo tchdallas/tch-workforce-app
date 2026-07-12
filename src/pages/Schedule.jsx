@@ -20,7 +20,9 @@ import DayViewSummary from '@/components/schedule/DayViewSummary';
 import DayTimeline from '@/components/schedule/DayTimeline';
 import ImportTemplateModal from '@/components/schedule/ImportTemplateModal';
 import TeamMemberModal from '@/components/team/TeamMemberModal';
-import { useLocations, useRoles, useTeamMembers, businessDayStartHour } from '@/lib/useAppData';
+import { useLocations, useRoles, useTeamMembers, usePars, useParTemplates, businessDayStartHour } from '@/lib/useAppData';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Target } from 'lucide-react';
 import { rolesAvailableAtLocation } from '@/lib/roleLocations';
 import { toast } from 'sonner';
 
@@ -75,6 +77,22 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
     queryFn: () => base44.entities.AppSetting.list(),
     placeholderData: [],
   });
+  // Par staffing plans for coverage comparison (pick which plan to build against)
+  const { data: parTemplates = [] } = useParTemplates();
+  const { data: allParWindows = [] } = usePars();
+  const [parPlanId, setParPlanId] = useState('');
+  const locParPlans = useMemo(
+    () => parTemplates.filter(t => t.locationId === selectedLocation).sort((a, b) => a.name.localeCompare(b.name)),
+    [parTemplates, selectedLocation]
+  );
+  useEffect(() => {
+    if (!locParPlans.some(t => t.id === parPlanId)) {
+      const def = locParPlans.find(t => t.isDefault) || locParPlans[0];
+      setParPlanId(def ? def.id : '');
+    }
+  }, [locParPlans, parPlanId]);
+  const planWindows = useMemo(() => allParWindows.filter(p => p.templateId === parPlanId), [allParWindows, parPlanId]);
+  const parPlanName = locParPlans.find(t => t.id === parPlanId)?.name;
 
   // 24/7: the query window follows the business-day boundary so an overnight
   // week (e.g. day starts 4 AM) includes Sat 1 AM shifts in the prior week
@@ -774,6 +792,19 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
         />
         <WeekSelector weekStart={weekStart} setWeekStart={setWeekStart} spanDays={spanDays} />
         <ViewDropdown value={viewKey} onChange={setViewKey} />
+        {locParPlans.length > 0 && (
+          <div className="flex items-center gap-1.5" title="Staffing plan to check coverage against">
+            <Target className="w-3.5 h-3.5 text-muted-foreground" />
+            <Select value={parPlanId} onValueChange={setParPlanId}>
+              <SelectTrigger className="h-9 w-[170px] text-xs"><SelectValue placeholder="Par plan" /></SelectTrigger>
+              <SelectContent>
+                {locParPlans.map(t => (
+                  <SelectItem key={t.id} value={t.id}>{t.name}{t.isDefault ? ' (default)' : ''}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         <label
           className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none"
           onClick={(e) => e.stopPropagation()}
@@ -868,6 +899,9 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
             roles={visibleRoles}
             teamMembers={teamMembers}
             dayStartHour={dayStartHour}
+            parWindows={planWindows}
+            planName={parPlanName}
+            locationId={selectedLocation}
             onShiftClick={(shift) => setShiftModal({ open: true, shift })}
           />
         ) : (
