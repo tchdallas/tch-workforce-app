@@ -1,25 +1,19 @@
-﻿import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, Check } from 'lucide-react';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-const typeColors = {
-  available: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
-  unavailable: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
-  preferred: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-};
-
 export default function AvailabilityForm({ memberId, manager = false }) {
   const queryClient = useQueryClient();
-  const [saving, setSaving] = useState(null);
+  const [status, setStatus] = useState('idle'); // 'idle' | 'saving' | 'saved'
+  const timers = useRef({});
+  const savedTimer = useRef(null);
 
   const { data: availabilities = [] } = useQuery({
     queryKey: ['my-availability', memberId],
@@ -33,54 +27,58 @@ export default function AvailabilityForm({ memberId, manager = false }) {
   const saveMutation = useMutation({
     mutationFn: async ({ dow, availabilityType, startTime, endTime }) => {
       const existing = getDay(dow);
-      const data = { teamMemberId: memberId, dayOfWeek: dow, availabilityType, startTime, endTime };
+      // "unavailable" means the whole day — no time window
+      const data = {
+        teamMemberId: memberId, dayOfWeek: dow, availabilityType,
+        startTime: availabilityType === 'unavailable' ? null : startTime,
+        endTime: availabilityType === 'unavailable' ? null : endTime,
+      };
       if (existing) return base44.entities.Availability.update(existing.id, data);
       return base44.entities.Availability.create(data);
     },
-    onSuccess: (_, vars) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-availability', memberId] });
-      setSaving(null);
-      toast.success('Availability saved');
+      setStatus('saved');
+      clearTimeout(savedTimer.current);
+      savedTimer.current = setTimeout(() => setStatus('idle'), 1800);
     },
+    onError: () => { setStatus('idle'); toast.error('Could not save availability'); },
   });
+
+  // auto-save each day, debounced so rapid time edits coalesce into one write
+  const scheduleSave = (dow, payload) => {
+    setStatus('saving');
+    clearTimeout(timers.current[dow]);
+    timers.current[dow] = setTimeout(() => saveMutation.mutate({ dow, ...payload }), 600);
+  };
 
   const DayRow = ({ dow }) => {
     const existing = getDay(dow);
     const [type, setType] = useState(existing?.availabilityType || 'available');
-    const [startTime, setStartTime] = useState(existing?.startTime || '09:00');
-    const [endTime, setEndTime] = useState(existing?.endTime || '17:00');
+    const [startTime, setStartTime] = useState(existing?.startTime?.slice(0, 5) || '09:00');
+    const [endTime, setEndTime] = useState(existing?.endTime?.slice(0, 5) || '17:00');
 
-    const isSaving = saving === dow;
-
-    const handleSave = () => {
-      setSaving(dow);
-      saveMutation.mutate({ dow, availabilityType: type, startTime, endTime });
-    };
+    const push = (next) => scheduleSave(dow, { availabilityType: type, startTime, endTime, ...next });
 
     return (
       <div className="flex flex-col sm:flex-row sm:items-center gap-2 py-3 border-b border-border last:border-0">
         <span className="text-sm font-medium w-24 shrink-0">{DAYS[dow]}</span>
         <div className="flex items-center gap-2 flex-wrap flex-1">
-          <Select value={type} onValueChange={setType}>
-            <SelectTrigger className="w-32 h-8 text-xs">
-              <SelectValue />
-            </SelectTrigger>
+          <Select value={type} onValueChange={v => { setType(v); push({ availabilityType: v }); }}>
+            <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="available">Available</SelectItem>
-              <SelectItem value="unavailable">Unavailable</SelectItem>
+              <SelectItem value="unavailable">Unavailable (all day)</SelectItem>
               <SelectItem value="preferred">Preferred</SelectItem>
             </SelectContent>
           </Select>
           {type !== 'unavailable' && (
             <>
-              <Input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className="w-28 h-8 text-xs" />
+              <Input type="time" value={startTime} onChange={e => { setStartTime(e.target.value); push({ startTime: e.target.value }); }} className="w-28 h-8 text-xs" />
               <span className="text-xs text-muted-foreground">to</span>
-              <Input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className="w-28 h-8 text-xs" />
+              <Input type="time" value={endTime} onChange={e => { setEndTime(e.target.value); push({ endTime: e.target.value }); }} className="w-28 h-8 text-xs" />
             </>
           )}
-          <Button size="sm" className="h-8 px-3 ml-auto" onClick={handleSave} disabled={isSaving}>
-            {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-          </Button>
         </div>
       </div>
     );
@@ -89,13 +87,18 @@ export default function AvailabilityForm({ memberId, manager = false }) {
   return (
     <Card>
       <CardContent className="p-4">
-        <p className="text-xs text-muted-foreground mb-3">
-          {manager ? "Set this team member's weekly availability. It drives scheduling recommendations." : 'Set your weekly availability. Managers can see this when scheduling.'}
-        </p>
+        <div className="flex items-center justify-between mb-3 gap-2">
+          <p className="text-xs text-muted-foreground">
+            {manager ? "This team member's weekly availability." : 'Your weekly availability. Managers see this when scheduling.'}{' '}
+            Changes save automatically.
+          </p>
+          <span className="text-xs text-muted-foreground flex items-center gap-1 shrink-0 min-w-[64px] justify-end">
+            {status === 'saving' && <><Loader2 className="w-3 h-3 animate-spin" /> Saving…</>}
+            {status === 'saved' && <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1"><Check className="w-3 h-3" /> Saved</span>}
+          </span>
+        </div>
         {DAYS.map((_, dow) => {
           const e = getDay(dow);
-          // key includes the loaded values so the row re-initializes once
-          // availability finishes loading (each DayRow seeds local state at mount)
           return <DayRow key={`${dow}-${e?.id || 'new'}-${e?.availabilityType || ''}-${e?.startTime || ''}-${e?.endTime || ''}`} dow={dow} />;
         })}
       </CardContent>
