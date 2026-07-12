@@ -19,7 +19,7 @@ const statusColors = {
   cancelled: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
 };
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const emptyForm = { recurrence: 'one_time', startDateTime: '', endDateTime: '', weekday: '1', reason: '', note: '' };
+const emptyForm = { recurrence: 'one_time', startDateTime: '', endDateTime: '', weekday: '1', reason: '', note: '', payType: 'unpaid' };
 
 export default function TimeOffForm({ memberId }) {
   const queryClient = useQueryClient();
@@ -61,6 +61,7 @@ export default function TimeOffForm({ memberId }) {
       isFullDay: true,
       reason: form.reason,
       note: form.note,
+      payType: form.payType,
       status: 'pending',
     });
   };
@@ -127,6 +128,26 @@ export default function TimeOffForm({ memberId }) {
               <Input value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} placeholder="Vacation, school, personal, etc." />
             </div>
             <div>
+              <Label className="text-xs">Pay</Label>
+              <div className="grid grid-cols-2 gap-2 mt-1">
+                {[{ v: 'paid', l: 'Paid (PTO)' }, { v: 'unpaid', l: 'Unpaid' }].map(opt => (
+                  <button
+                    key={opt.v}
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, payType: opt.v }))}
+                    className={cn(
+                      'h-9 rounded-md border text-sm font-medium transition-colors',
+                      form.payType === opt.v
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'bg-transparent text-muted-foreground border-input hover:bg-accent/10'
+                    )}
+                  >
+                    {opt.l}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
               <Label className="text-xs">Additional Note</Label>
               <Input value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} placeholder="Optional details" />
             </div>
@@ -160,6 +181,7 @@ export default function TimeOffForm({ memberId }) {
                 {req.reason && <p className="text-xs text-muted-foreground truncate">{req.reason}</p>}
               </div>
               <div className="flex items-center gap-2 shrink-0">
+                <Badge variant="outline" className="text-[10px]">{req.payType === 'paid' ? 'PTO' : 'Unpaid'}</Badge>
                 <Badge className={cn("text-[10px] border-0", statusColors[req.status])}>{req.status}</Badge>
                 {req.status === 'pending' && (
                   <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={() => cancelMutation.mutate(req.id)}>
