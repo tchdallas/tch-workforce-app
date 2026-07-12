@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Plus, Image as ImageIcon, Trophy } from 'lucide-react';
 import { format } from 'date-fns';
 import NewDownCardModal from '@/components/downs/NewDownCardModal';
+import DownCardDetailModal from '@/components/downs/DownCardDetailModal';
 
 // down cards with tournament name + downs/photo counts, most recent first
 async function fetchCards() {
@@ -33,6 +34,7 @@ async function fetchCards() {
 
 export default function Downs() {
   const [modalOpen, setModalOpen] = useState(false);
+  const [detailCardId, setDetailCardId] = useState(null);
   const { data: locations = [] } = useLocations();
 
   const { data: tournaments = [] } = useQuery({
@@ -104,7 +106,7 @@ export default function Downs() {
       ) : (
         <div className="space-y-2">
           {cards.map(c => (
-            <Card key={c.id} className="p-3 flex items-center gap-3">
+            <Card key={c.id} className="p-3 flex items-center gap-3 cursor-pointer hover:bg-muted/40" onClick={() => setDetailCardId(c.id)}>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium truncate">{c.tournamentName}</p>
                 <p className="text-[11px] text-muted-foreground">
@@ -128,6 +130,14 @@ export default function Downs() {
         locations={locations}
         tournaments={tournaments}
         series={series}
+      />
+
+      <DownCardDetailModal
+        cardId={detailCardId}
+        open={!!detailCardId}
+        onClose={() => setDetailCardId(null)}
+        onChanged={() => setDetailCardId(null)}
+        locationName={locName(cards.find(c => c.id === detailCardId)?.locationId)}
       />
     </div>
   );
