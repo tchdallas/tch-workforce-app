@@ -9,6 +9,7 @@
 // Postgres snake_case schema, converts base44's embedded ID arrays to junction
 // tables, and routes team members' shift reads through the schedule_shifts view.
 import { supabase } from './supabase';
+import { APP_URL } from '@/lib/appConfig';
 
 // ---------------------------------------------------------------------------
 // current member cache (drives Shift table-vs-view routing and auth.me)
@@ -495,10 +496,10 @@ const users = {
   inviteUser: async (email) => {
     const addr = (email || '').trim();
     if (!addr) throw new Error('Email is required to send an invite');
-    const redirectTo = typeof window !== 'undefined' ? window.location.origin : undefined;
+    // always the deployed app URL, so the link works from any device
     const { error } = await supabase.auth.signInWithOtp({
       email: addr,
-      options: { shouldCreateUser: true, emailRedirectTo: redirectTo },
+      options: { shouldCreateUser: true, emailRedirectTo: APP_URL },
     });
     if (error) throw error;
     // record the invite so the roster can show "Invited"; non-fatal if it

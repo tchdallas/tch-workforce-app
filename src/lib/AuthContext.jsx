@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { supabase } from '@/api/supabase';
 import { getCurrentMemberRow } from '@/api/dataClient';
+import { APP_URL } from '@/lib/appConfig';
 
 const AuthContext = createContext();
 
@@ -56,6 +57,15 @@ export const AuthProvider = ({ children }) => {
         });
         setIsAuthenticated(true);
         setAuthError(null);
+        // mark them as truly "joined" the first time they actually open the app
+        // (the invite auto-links user_id before they ever log in, so this is the
+        // reliable signal). One-time write per member.
+        if (!member.last_login_at) {
+          supabase.from('team_members')
+            .update({ last_login_at: new Date().toISOString() })
+            .eq('id', member.id)
+            .then(() => {});
+        }
       }
     } catch (error) {
       console.error('Auth check failed:', error);
@@ -103,7 +113,7 @@ export const AuthProvider = ({ children }) => {
 
   const resetPassword = async (email) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin,
+      redirectTo: APP_URL,
     });
     if (error) throw error;
   };

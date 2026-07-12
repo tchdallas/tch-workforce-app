@@ -388,7 +388,7 @@ export default function TeamMembers() {
               )}
               {tm.status !== 'archived' && tm.email && (
                 <div className="mt-3 pt-2 border-t border-border/50 flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                  {tm.userId ? (
+                  {tm.lastLoginAt ? (
                     <span className="text-[10px] text-emerald-600 flex items-center gap-1">
                       <CheckCircle2 className="w-3 h-3" /> Joined
                     </span>
