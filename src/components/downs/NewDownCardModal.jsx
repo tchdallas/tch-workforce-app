@@ -12,9 +12,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import TeamMemberCombobox from '@/components/common/TeamMemberCombobox';
-import { Plus, X, Loader2, ImagePlus, Clock } from 'lucide-react';
+import { Plus, X, Loader2, ImagePlus, Clock, ScanLine } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { scanDownCard, matchEntry } from '@/lib/downOcr';
 
 // live count of downs already recorded for a tournament (excludes this new card)
 async function countTournamentDowns(tournamentId) {
@@ -61,11 +62,13 @@ export default function NewDownCardModal({ open, onClose, onSaved, locations = [
   const [rows, setRows] = useState([]);                    // [{ tmpId, teamMemberId, durationMinutes }]
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scan, setScan] = useState(null);   // [{ e, m }]
 
   useEffect(() => {
     if (open) {
       setCardDate(todayIso()); setTournamentId(''); setNewTournamentName(''); setNewTournamentLoc('');
-      setSeriesId(''); setNewSeriesName(''); setTableNumber(''); setPhotos([]); setRows([]);
+      setSeriesId(''); setNewSeriesName(''); setTableNumber(''); setPhotos([]); setRows([]); setScan(null);
     }
   }, [open]);
 
@@ -110,6 +113,22 @@ export default function NewDownCardModal({ open, onClose, onSaved, locations = [
     } catch (e) {
       toast.error(e.message || 'Photo upload failed');
     } finally { setUploading(false); }
+  };
+
+  const runScan = async () => {
+    if (!photos.length) return;
+    setScanning(true);
+    try {
+      const entries = await scanDownCard(photos.map(p => p.file_url));
+      setScan(entries.map(e => ({ e, m: matchEntry(e, teamMembers) })));
+    } catch (err) {
+      toast.error(err.message || 'Could not read the photo');
+    } finally { setScanning(false); }
+  };
+
+  const addAllMatched = () => {
+    (scan || []).forEach(({ m }) => { if (m) addDown(m.id); });
+    toast.success('Added matched dealers — review and adjust');
   };
 
   const valid =
@@ -248,7 +267,34 @@ export default function NewDownCardModal({ open, onClose, onSaved, locations = [
                 <input type="file" accept="image/*" multiple capture="environment" className="hidden" onChange={e => handleFiles(e.target.files)} />
               </label>
             </div>
+            {photos.length > 0 && (
+              <Button size="sm" variant="outline" className="mt-2 h-7 gap-1.5 text-xs" onClick={runScan} disabled={scanning}>
+                {scanning ? <Loader2 className="w-3 h-3 animate-spin" /> : <ScanLine className="w-3 h-3" />}
+                Read photo (cross-check)
+              </Button>
+            )}
           </div>
+
+          {/* OCR cross-check */}
+          {scan && (
+            <div className="rounded-md border border-border p-2.5 bg-muted/20 text-xs space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-medium">Photo found {scan.length} down{scan.length !== 1 ? 's' : ''} · {scan.filter(s => s.m).length} matched</span>
+                {scan.some(s => s.m) && (
+                  <button className="text-primary hover:underline" onClick={addAllMatched}>Add all matched</button>
+                )}
+              </div>
+              <p className="text-[10px] text-muted-foreground">Assistive only — the photo reading can be wrong. Compare with your entries below.</p>
+              <div className="flex flex-wrap gap-1">
+                {scan.map((s, i) => (
+                  <span key={i} className={cn('px-1.5 py-0.5 rounded text-[10px] border',
+                    s.m ? 'border-emerald-300 text-emerald-700' : 'border-amber-300 text-amber-700')}>
+                    {s.m ? `${s.m.preferredName || s.m.firstName} ${s.m.lastName}` : (s.e.name || s.e.badge || '?') + ' (no match)'}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* downs */}
           <div>
