@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import AvailabilityForm from '@/components/profile/AvailabilityForm';
 
 const defaultMember = {
   tmNumber: '', firstName: '', lastName: '', preferredName: '', email: '', phone: '',
@@ -66,6 +67,7 @@ export default function TeamMemberModal({ open, onClose, member, locations, role
             <TabsTrigger value="assignments" className="text-xs">Assignments</TabsTrigger>
             <TabsTrigger value="contact" className="text-xs">Contact</TabsTrigger>
             <TabsTrigger value="admin" className="text-xs">Admin</TabsTrigger>
+            {isEdit && <TabsTrigger value="availability" className="text-xs">Availability</TabsTrigger>}
           </TabsList>
 
           {/* native overflow, not Radix ScrollArea: Safari can't scroll a
@@ -279,6 +281,15 @@ export default function TeamMemberModal({ open, onClose, member, locations, role
                 />
               </div>
             </TabsContent>
+
+            {isEdit && (
+              <TabsContent value="availability" className="mt-0">
+                <p className="text-xs text-muted-foreground mb-2">
+                  This team member's weekly availability — drives scheduling recommendations and warnings. Saves per day.
+                </p>
+                <AvailabilityForm memberId={member.id} manager />
+              </TabsContent>
+            )}
           </div>
         </Tabs>
 

@@ -17,7 +17,7 @@ const typeColors = {
   preferred: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
 };
 
-export default function AvailabilityForm({ memberId }) {
+export default function AvailabilityForm({ memberId, manager = false }) {
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(null);
 
@@ -89,10 +89,15 @@ export default function AvailabilityForm({ memberId }) {
   return (
     <Card>
       <CardContent className="p-4">
-        <p className="text-xs text-muted-foreground mb-3">Set your weekly availability. Managers can see this when scheduling.</p>
-        {DAYS.map((_, dow) => (
-          <DayRow key={dow} dow={dow} />
-        ))}
+        <p className="text-xs text-muted-foreground mb-3">
+          {manager ? "Set this team member's weekly availability. It drives scheduling recommendations." : 'Set your weekly availability. Managers can see this when scheduling.'}
+        </p>
+        {DAYS.map((_, dow) => {
+          const e = getDay(dow);
+          // key includes the loaded values so the row re-initializes once
+          // availability finishes loading (each DayRow seeds local state at mount)
+          return <DayRow key={`${dow}-${e?.id || 'new'}-${e?.availabilityType || ''}-${e?.startTime || ''}-${e?.endTime || ''}`} dow={dow} />;
+        })}
       </CardContent>
     </Card>
   );
