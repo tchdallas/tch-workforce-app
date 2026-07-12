@@ -1,6 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { useAllAvailability, useApprovedTimeOff, restGapHours, businessDayStartHour } from '@/lib/useAppData';
+import { businessDayOf } from '@/lib/utils';
+import { annotateAndSort, buildLookups } from '@/lib/scheduleAvailability';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,7 +24,7 @@ const defaultShift = {
   teamFacingNotes: '', internalNotes: '', tags: [],
 };
 
-export default function ShiftModal({ open, onClose, shift, locations, roles, teamMembers, onSave, onDelete }) {
+export default function ShiftModal({ open, onClose, shift, locations, roles, teamMembers, shifts = [], onSave, onDelete }) {
   const [form, setForm] = useState(defaultShift);
   const isEdit = !!shift?.id;
 
@@ -46,19 +49,38 @@ export default function ShiftModal({ open, onClose, shift, locations, roles, tea
     }
   }, [shift, open]);
 
-  const eligibleTeamMembers = teamMembers.filter(tm => {
-    if (!form.locationId || !form.roleId) return true;
-    const hasLocation = tm.assignedLocationIds?.includes(form.locationId) || tm.homeLocationId === form.locationId;
-    const hasRole = tm.assignedRoleIds?.includes(form.roleId);
-    return hasLocation && hasRole;
-  });
-
   // Default shift length: role override → location setting → company setting → 8h
   const { data: settings = [] } = useQuery({
     queryKey: ['app-settings'],
     queryFn: () => base44.entities.AppSetting.list(),
     placeholderData: [],
   });
+  const { data: availabilityAll = [] } = useAllAvailability();
+  const { data: approvedTimeOff = [] } = useApprovedTimeOff();
+
+  // Eligible members (role + location), annotated with availability / conflict
+  // status and sorted so recommended people (preferred + available) come first.
+  const { orderedMembers, statusById } = useMemo(() => {
+    const eligible = teamMembers.filter(tm => {
+      if (!form.locationId || !form.roleId) return true;
+      const hasLocation = tm.assignedLocationIds?.includes(form.locationId) || tm.homeLocationId === form.locationId;
+      const hasRole = tm.assignedRoleIds?.includes(form.roleId);
+      return hasLocation && hasRole;
+    });
+    if (!form.startDateTime || !form.endDateTime || !form.locationId || !form.roleId) {
+      return { orderedMembers: eligible, statusById: null };
+    }
+    const dayStartHour = businessDayStartHour(settings, form.locationId);
+    const dayOfWeek = new Date(businessDayOf(form.startDateTime, dayStartHour) + 'T00:00:00').getDay();
+    const lookups = buildLookups({ availability: availabilityAll, timeOff: approvedTimeOff, shifts });
+    const locationNameById = Object.fromEntries(locations.map(l => [l.id, l.name]));
+    const { ordered, statusById } = annotateAndSort(
+      eligible,
+      { start: new Date(form.startDateTime), end: new Date(form.endDateTime), dayOfWeek, excludeShiftId: shift?.id },
+      { ...lookups, restGapMs: restGapHours(settings, form.locationId) * 3600000, locationNameById }
+    );
+    return { orderedMembers: ordered, statusById };
+  }, [teamMembers, form.locationId, form.roleId, form.startDateTime, form.endDateTime, settings, availabilityAll, approvedTimeOff, shifts, locations, shift?.id]);
   const durationFor = (roleId) => {
     const role = roles.find(r => r.id === roleId);
     const locVal = parseFloat(settings.find(s => s.key === 'default_shift_hours' && s.scope === 'location' && s.locationId === form.locationId)?.value);
@@ -160,9 +182,10 @@ export default function ShiftModal({ open, onClose, shift, locations, roles, tea
             <TeamMemberCombobox
               value={form.teamMemberId || 'open'}
               onChange={v => setForm(f => ({ ...f, teamMemberId: v === 'open' ? '' : v }))}
-              eligibleTeamMembers={eligibleTeamMembers}
+              eligibleTeamMembers={orderedMembers}
+              statusFor={statusById ? (id) => statusById.get(id) : undefined}
             />
-            {eligibleTeamMembers.filter(tm => tm.status === 'active').length === 0 && form.locationId && form.roleId && (
+            {orderedMembers.filter(tm => tm.status === 'active').length === 0 && form.locationId && form.roleId && (
               <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
                 <AlertTriangle className="w-3 h-3" /> No eligible team members for this location/role
               </p>

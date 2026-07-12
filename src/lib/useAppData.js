@@ -155,3 +155,34 @@ export function useAvailability(teamMemberId) {
     ...SEMI_STATIC,
   });
 }
+
+// All recurring availability the viewer can see (RLS scopes it to their
+// locations) — used to recommend/mark candidates when filling shifts.
+export function useAllAvailability() {
+  return useQuery({
+    queryKey: ['availability-all'],
+    queryFn: () => base44.entities.Availability.list(),
+    placeholderData: [],
+    ...SEMI_STATIC,
+  });
+}
+
+// Approved time off (date-specific hard un-availability) for scheduling checks.
+export function useApprovedTimeOff() {
+  return useQuery({
+    queryKey: ['approved-time-off'],
+    queryFn: () => base44.entities.TimeOffRequest.filter({ status: 'approved' }),
+    placeholderData: [],
+    ...SEMI_STATIC,
+  });
+}
+
+// Minimum rest between two shifts (hours) before the scheduler flags them as
+// "too close". Location setting overrides company; default 8.
+export function restGapHours(settings, locationId) {
+  const val =
+    (locationId && settings.find(s => s.key === 'min_rest_hours' && s.scope === 'location' && s.locationId === locationId)?.value)
+    ?? settings.find(s => s.key === 'min_rest_hours' && s.scope === 'company')?.value;
+  const n = parseFloat(val);
+  return Number.isFinite(n) && n >= 0 ? n : 8;
+}

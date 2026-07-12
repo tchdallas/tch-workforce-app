@@ -1013,6 +1013,7 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
         locations={locations}
         roles={visibleRoles}
         teamMembers={teamMembers}
+        shifts={shifts}
         onSave={handleSave}
         onDelete={(id) => deleteShift.mutate(id)}
       />
