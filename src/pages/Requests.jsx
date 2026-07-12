@@ -277,8 +277,9 @@ export default function Requests() {
                   <div className="min-w-0">
                     <p className="font-medium text-sm">{getName(req.teamMemberId)}</p>
                     <p className="text-xs text-muted-foreground">
-                      {req.startDateTime && format(new Date(req.startDateTime), 'MMM d')} – {req.endDateTime && format(new Date(req.endDateTime), 'MMM d, yyyy')}
-                      {req.isFullDay ? ' (Full day)' : ''}
+                      {req.recurrence === 'weekly'
+                        ? <>Every {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][req.weekday]}{req.endDateTime ? ` · until ${format(new Date(req.endDateTime), 'MMM d, yyyy')}` : ' · ongoing'}</>
+                        : <>{req.startDateTime && format(new Date(req.startDateTime), 'MMM d')} – {req.endDateTime && format(new Date(req.endDateTime), 'MMM d, yyyy')}{req.isFullDay ? ' (Full day)' : ''}</>}
                     </p>
                     {req.reason && <p className="text-xs text-muted-foreground mt-0.5">{req.reason}</p>}
                   </div>
@@ -293,6 +294,11 @@ export default function Requests() {
                           <X className="w-4 h-4" />
                         </Button>
                       </>
+                    )}
+                    {req.status === 'approved' && req.recurrence === 'weekly' && (
+                      <Button size="sm" variant="ghost" className="h-8 text-xs text-red-500" title="End this recurring time off" onClick={() => approveTimeOff.mutate({ id: req.id, status: 'cancelled' })}>
+                        Stop
+                      </Button>
                     )}
                   </div>
                 </CardContent>

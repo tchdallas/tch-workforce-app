@@ -45,8 +45,18 @@ export function evaluateMember(memberId, shiftCtx, data) {
     else if (row.availabilityType === 'preferred') prefers = true;
   });
 
-  // --- approved time off (hard) ---
-  const offHit = (timeOffByMember.get(memberId) || []).some(t => ms(t.startDateTime) < ms(end) && ms(t.endDateTime) > ms(start));
+  // --- approved time off (hard): one-time date range, or recurring weekly ---
+  const dayOnly = (d) => { const x = new Date(d); return new Date(x.getFullYear(), x.getMonth(), x.getDate()); };
+  const shiftDay = dayOnly(start);
+  const offHit = (timeOffByMember.get(memberId) || []).some(t => {
+    if (t.recurrence === 'weekly') {
+      if (t.weekday !== dayOfWeek) return false;
+      if (t.startDateTime && shiftDay < dayOnly(t.startDateTime)) return false;
+      if (t.endDateTime && shiftDay > dayOnly(t.endDateTime)) return false; // null end = indefinite
+      return true;
+    }
+    return t.endDateTime && ms(t.startDateTime) < ms(end) && ms(t.endDateTime) > ms(start);
+  });
   if (offHit) { severity = Math.max(severity, SEV.timeOff); reasons.push('On approved time off'); }
 
   // --- scheduling conflicts from this member's other shifts ---
