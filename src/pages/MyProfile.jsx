@@ -8,8 +8,9 @@ import ProfilePhotoSection from '@/components/profile/ProfilePhotoSection';
 import PersonalInfoForm from '@/components/profile/PersonalInfoForm';
 import TimeOffForm from '@/components/profile/TimeOffForm';
 import AvailabilityForm from '@/components/profile/AvailabilityForm';
+import NotificationPreferencesForm from '@/components/profile/NotificationPreferencesForm';
 import { toast } from 'sonner';
-import { User, CalendarOff, Clock, LogOut } from 'lucide-react';
+import { User, CalendarOff, Clock, Bell, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/AuthContext';
 
@@ -52,6 +53,9 @@ export default function MyProfile() {
           <TabsTrigger value="availability" className="flex-1 gap-1.5 text-xs">
             <Clock className="w-3.5 h-3.5" /> Availability
           </TabsTrigger>
+          <TabsTrigger value="notifications" className="flex-1 gap-1.5 text-xs">
+            <Bell className="w-3.5 h-3.5" /> Alerts
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="info" className="mt-4">
@@ -64,6 +68,10 @@ export default function MyProfile() {
 
         <TabsContent value="availability" className="mt-4">
           <AvailabilityForm memberId={member.id} />
+        </TabsContent>
+
+        <TabsContent value="notifications" className="mt-4">
+          <NotificationPreferencesForm memberId={member.id} />
         </TabsContent>
       </Tabs>
 
