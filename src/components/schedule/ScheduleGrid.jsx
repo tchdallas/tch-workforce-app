@@ -3,9 +3,11 @@ import { format, addDays, isSameDay } from 'date-fns';
 import { cn, businessDayOf } from '@/lib/utils';
 import { Plus, ChevronDown, ChevronRight } from 'lucide-react';
 import ShiftCard from './ShiftCard';
+import { roleDayCoverage } from '@/lib/parCoverage';
 
 export default function ScheduleGrid({
   weekStart, shifts, roles, teamMembers, locations, viewMode,
+  parWindows = [],
   onShiftClick, onAddShift, selectedLocation,
   selectedShiftId, onShiftSelect,
   selectedShiftIds, onShiftMultiSelect,
@@ -392,6 +394,13 @@ export default function ScheduleGrid({
             const openShiftsForRole = shifts.filter(s => s.roleId === role.id && !s.teamMemberId);
             const hasOpenShifts = openShiftsForRole.length > 0;
             const isCollapsed = collapsedRoles.has(role.id);
+            // par coverage across the visible days for this role
+            let roleShort = 0, roleHasPar = false;
+            if (parWindows.length) days.forEach(day => {
+              const cov = roleDayCoverage(parWindows, shifts, role.id, day, dayStartHour, selectedLocation);
+              if (cov.length) roleHasPar = true;
+              roleShort += cov.filter(c => c.status === 'short').length;
+            });
             return (
               <div key={role.id}>
                 <div
@@ -409,6 +418,15 @@ export default function ScheduleGrid({
                     <span className="text-[10px] text-muted-foreground">
                       ({roleTeamMembers.length}{hasOpenShifts ? <> + <span className="text-red-500 font-semibold">{openShiftsForRole.length} open</span></> : ''})
                     </span>
+                    {roleShort > 0 ? (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300" title="Understaffed par windows this week">
+                        {roleShort} under par
+                      </span>
+                    ) : roleHasPar ? (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" title="All par windows met this week">
+                        par met
+                      </span>
+                    ) : null}
                   </div>
                 </div>
                 {!isCollapsed && (
