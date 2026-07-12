@@ -488,12 +488,25 @@ const integrations = {
 // provider — planned alongside the Phase 4 notification service. Until then
 // this explains itself instead of failing cryptically.
 const users = {
-  inviteUser: async () => {
-    const err = new Error(
-      'Email invites are coming with the notification service. For now, add the member here, then have them use "Forgot password?" on the login screen with their email.'
-    );
-    err.status = 501;
-    throw err;
+  // Send an app invite: a magic-link email. Clicking it creates the auth
+  // account (linked to the matching team_member by email via DB trigger) and
+  // signs them in; they then set a password in their profile. Works with
+  // whatever SMTP Supabase is configured to use (e.g. Google Workspace).
+  inviteUser: async (email) => {
+    const addr = (email || '').trim();
+    if (!addr) throw new Error('Email is required to send an invite');
+    const redirectTo = typeof window !== 'undefined' ? window.location.origin : undefined;
+    const { error } = await supabase.auth.signInWithOtp({
+      email: addr,
+      options: { shouldCreateUser: true, emailRedirectTo: redirectTo },
+    });
+    if (error) throw error;
+    // record the invite so the roster can show "Invited"; non-fatal if it
+    // doesn't match a row the caller can update
+    await supabase.from('team_members')
+      .update({ invited_at: new Date().toISOString() })
+      .eq('email', addr);
+    return { ok: true };
   },
 };
 

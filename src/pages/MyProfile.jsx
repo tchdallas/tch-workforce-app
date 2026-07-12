@@ -8,6 +8,7 @@ import ProfilePhotoSection from '@/components/profile/ProfilePhotoSection';
 import PersonalInfoForm from '@/components/profile/PersonalInfoForm';
 import TimeOffForm from '@/components/profile/TimeOffForm';
 import AvailabilityForm from '@/components/profile/AvailabilityForm';
+import ChangePasswordCard from '@/components/profile/ChangePasswordCard';
 import { toast } from 'sonner';
 import { User, CalendarOff, Clock, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -56,6 +57,7 @@ export default function MyProfile() {
 
         <TabsContent value="info" className="mt-4">
           <PersonalInfoForm member={member} onSave={(data) => updateMutation.mutate(data)} saving={updateMutation.isPending} />
+          <ChangePasswordCard />
         </TabsContent>
 
         <TabsContent value="timeoff" className="mt-4">

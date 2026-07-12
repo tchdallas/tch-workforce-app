@@ -6,7 +6,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Search, Mail, MapPin, UserPlus, Upload, Trash2, CheckSquare, Square, Undo2, Loader2, Users, Archive, ArchiveRestore } from 'lucide-react';
+import { Plus, Search, Mail, MapPin, UserPlus, Upload, Trash2, CheckSquare, Square, Undo2, Loader2, Users, Archive, ArchiveRestore, CheckCircle2 } from 'lucide-react';
+import { format } from 'date-fns';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
@@ -35,6 +36,20 @@ export default function TeamMembers() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviting, setInviting] = useState(false);
+  const [invitingId, setInvitingId] = useState(null);
+
+  const handleSendInvite = async (tm) => {
+    setInvitingId(tm.id);
+    try {
+      await base44.users.inviteUser(tm.email, 'user');
+      toast.success(`Invite sent to ${tm.email}`);
+      queryClient.invalidateQueries({ queryKey: ['teamMembers'] });
+    } catch (e) {
+      toast.error(e.message || 'Could not send invite');
+    } finally {
+      setInvitingId(null);
+    }
+  };
   const [importOpen, setImportOpen] = useState(false);
   const [bulkInviteOpen, setBulkInviteOpen] = useState(false);
   const [bulkSelectMode, setBulkSelectMode] = useState(false);
@@ -368,6 +383,31 @@ export default function TeamMembers() {
                     <Badge variant="outline" className="text-[9px] px-1.5 py-0">
                       +{tm.assignedRoleIds.length - 3}
                     </Badge>
+                  )}
+                </div>
+              )}
+              {tm.status !== 'archived' && tm.email && (
+                <div className="mt-3 pt-2 border-t border-border/50 flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                  {tm.userId ? (
+                    <span className="text-[10px] text-emerald-600 flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" /> Joined
+                    </span>
+                  ) : (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 gap-1.5 text-xs"
+                        onClick={() => handleSendInvite(tm)}
+                        disabled={invitingId === tm.id}
+                      >
+                        {invitingId === tm.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Mail className="w-3 h-3" />}
+                        {tm.invitedAt ? 'Resend invite' : 'Send invite'}
+                      </Button>
+                      {tm.invitedAt && (
+                        <span className="text-[10px] text-muted-foreground">Invited {format(new Date(tm.invitedAt), 'MMM d')}</span>
+                      )}
+                    </>
                   )}
                 </div>
               )}
