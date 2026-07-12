@@ -126,6 +126,11 @@ const ENTITIES = {
   Callout: { table: 'callouts' },
   TimeEntry: { table: 'time_entries' },
   LiveRoadmapNote: { table: 'live_roadmap_notes' },
+  TournamentSeries: { table: 'tournament_series', readOnly: ['createdBy', 'created_by'] },
+  Tournament: { table: 'tournaments', readOnly: ['createdBy', 'created_by'] },
+  DownCard: { table: 'down_cards', readOnly: ['createdBy', 'created_by'] },
+  Down: { table: 'downs' },
+  DownCardPhoto: { table: 'down_card_photos' },
   // blindWrites: creators of these rows often can't SELECT them back under RLS
   // (a notification belongs to its recipient; audit reads are manager+), so
   // writes skip the RETURNING clause and reads of the result aren't attempted

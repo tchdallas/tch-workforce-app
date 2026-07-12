@@ -27,6 +27,7 @@ import ScheduleTemplates from '@/pages/ScheduleTemplates';
 import Login from '@/pages/Login';
 import Kiosk from '@/pages/Kiosk';
 import Timesheets from '@/pages/Timesheets';
+import Downs from '@/pages/Downs';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, isAuthenticated, authError } = useAuth();
@@ -66,6 +67,7 @@ const AuthenticatedApp = () => {
         <Route path="/my-profile" element={<MyProfile />} />
         <Route path="/schedule-templates" element={<ScheduleTemplates />} />
         <Route path="/timesheets" element={<Timesheets />} />
+        <Route path="/downs" element={<Downs />} />
       </Route>
       {/* fullscreen kiosk — no app chrome */}
       <Route path="/kiosk" element={<Kiosk />} />
