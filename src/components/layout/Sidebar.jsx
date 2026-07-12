@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Calendar, Radio, Users, MapPin, Shield, BarChart3,
   Settings, Bell, ClipboardList, AlertTriangle, HandHelping, ChevronLeft, ChevronRight,
-  Activity, User, LayoutTemplate, CalendarCheck, Clock, LogOut, MessageSquare
+  Activity, User, LayoutTemplate, CalendarCheck, Clock, LogOut, MessageSquare, Megaphone
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ const allNavItems = [
   { label: 'Schedule', icon: Calendar, path: '/schedule', managerOnly: false },
   { label: 'My Schedule', icon: CalendarCheck, path: '/my-schedule', managerOnly: false },
   { label: 'Messages', icon: MessageSquare, path: '/messages', managerOnly: false },
+  { label: 'Announcements', icon: Megaphone, path: '/announcements', managerOnly: false },
   { label: 'Templates', icon: LayoutTemplate, path: '/schedule-templates', managerOnly: true },
   { label: 'Live Roadmap', icon: Radio, path: '/roadmap', managerOnly: false },
   { label: 'Open Shifts', icon: HandHelping, path: '/open-shifts', managerOnly: false },

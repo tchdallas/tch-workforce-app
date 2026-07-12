@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { X, LayoutDashboard, Calendar, Radio, Users, MapPin, Shield, BarChart3, Settings, Bell, ClipboardList, AlertTriangle, HandHelping, Activity, LayoutTemplate, CalendarCheck, LogOut, MessageSquare } from 'lucide-react';
+import { X, LayoutDashboard, Calendar, Radio, Users, MapPin, Shield, BarChart3, Settings, Bell, ClipboardList, AlertTriangle, HandHelping, Activity, LayoutTemplate, CalendarCheck, LogOut, MessageSquare, Megaphone } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useCurrentMember } from '@/hooks/useCurrentMember';
@@ -11,6 +11,7 @@ const allNavItems = [
   { label: 'Schedule', icon: Calendar, path: '/schedule', managerOnly: false },
   { label: 'My Schedule', icon: CalendarCheck, path: '/my-schedule', managerOnly: false },
   { label: 'Messages', icon: MessageSquare, path: '/messages', managerOnly: false },
+  { label: 'Announcements', icon: Megaphone, path: '/announcements', managerOnly: false },
   { label: 'Templates', icon: LayoutTemplate, path: '/schedule-templates', managerOnly: true },
   { label: 'Live Roadmap', icon: Radio, path: '/roadmap', managerOnly: false },
   { label: 'Open Shifts', icon: HandHelping, path: '/open-shifts', managerOnly: false },

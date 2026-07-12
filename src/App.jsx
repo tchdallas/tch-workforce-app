@@ -28,6 +28,7 @@ import Login from '@/pages/Login';
 import Kiosk from '@/pages/Kiosk';
 import Timesheets from '@/pages/Timesheets';
 import Messages from '@/pages/Messages';
+import Announcements from '@/pages/Announcements';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, isAuthenticated, authError } = useAuth();
@@ -65,6 +66,7 @@ const AuthenticatedApp = () => {
         <Route path="/audit-log" element={<AuditLog />} />
         <Route path="/my-schedule" element={<MySchedule />} />
         <Route path="/messages" element={<Messages />} />
+        <Route path="/announcements" element={<Announcements />} />
         <Route path="/my-profile" element={<MyProfile />} />
         <Route path="/schedule-templates" element={<ScheduleTemplates />} />
         <Route path="/timesheets" element={<Timesheets />} />
