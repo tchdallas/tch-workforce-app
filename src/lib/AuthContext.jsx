@@ -35,6 +35,7 @@ export const AuthProvider = ({ children }) => {
         setAuthError({
           type: 'user_not_registered',
           message: 'No team member record is linked to this login. Contact your administrator.',
+          email: session.user.email,
         });
       } else if (member.status === 'inactive' || member.status === 'archived') {
         setUser(null);
@@ -42,6 +43,7 @@ export const AuthProvider = ({ children }) => {
         setAuthError({
           type: 'user_not_registered',
           message: 'Your access to this app has been revoked.',
+          email: session.user.email,
         });
       } else {
         setUser({

@@ -214,10 +214,20 @@ function mapDataIn(cfg, data) {
   return out;
 }
 
+// Server-managed keys must be dropped from child rows before a bulk insert.
+// Rows loaded from the DB carry id/createdAt/updatedAt; freshly-added rows do
+// not. PostgREST rejects a bulk insert whose objects don't all share the same
+// keys ("All object keys must match"), so a mix of loaded + new children would
+// fail the insert — and since the child sync deletes first, that silently wipes
+// every child. Stripping these keys keeps every row's column set identical.
+const CHILD_SKIP_KEYS = new Set([
+  'id', 'createdAt', 'created_at', 'updatedAt', 'updated_at',
+  'createdDate', 'updatedDate',
+]);
 function mapChildIn(child) {
   const out = {};
   for (const [k, v] of Object.entries(child || {})) {
-    if (v === undefined || k === 'id') continue;
+    if (v === undefined || CHILD_SKIP_KEYS.has(k)) continue;
     out[camelToSnake(k)] = v === '' ? null : v;
   }
   return out;
