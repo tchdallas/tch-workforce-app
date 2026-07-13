@@ -408,6 +408,7 @@ export default function ScheduleGrid({
     const HOURS = Array.from({ length: 24 }, (_, i) => (dayStartHour + i) % 24); // 4a → 3a
     const hourLabel = (h) => { const d = new Date(); d.setHours(h, 0, 0, 0); return format(d, 'h a'); };
     return (
+      <div className="overflow-x-auto h-full overflow-y-auto">
       <div style={{ minWidth: `${160 + spanDays * (isCompact ? 60 : 80)}px` }}>
         <div className="grid border-b border-border sticky top-0 bg-card z-10" style={gridStyle}>
           <div className="p-2 text-xs font-semibold text-muted-foreground flex items-center gap-1">Time / Role<CollapseAllToggle /></div>
@@ -468,6 +469,7 @@ export default function ScheduleGrid({
             </div>
           );
         })}
+      </div>
       </div>
     );
   }
