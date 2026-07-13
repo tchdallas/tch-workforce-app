@@ -6,21 +6,23 @@
 // Env vars (set in Vercel → Project → Settings → Environment Variables):
 //   ANTHROPIC_API_KEY   (required) — your Claude API key
 //   OCR_MODEL           (optional) — defaults to claude-sonnet-5
-//   SUPABASE_ANON_KEY   (optional) — if set, the caller's Supabase token is verified
 const SUPABASE_URL = 'https://gyruqtngvjcwhgkhphxf.supabase.co';
+// Publishable anon key (safe to embed — it's already in the client bundle).
+// Used only to authenticate the caller's own token against Supabase, so the
+// endpoint answers signed-in staff and no one else. Hardcoded (like the URL
+// above) so it can't drift out of sync with a mis-pasted env var.
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd5cnVxdG5ndmpjd2hna2hwaHhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMwMzQzOTgsImV4cCI6MjA5ODYxMDM5OH0.h-uoieOFIOKyzNYWnddljzUoXlwRIOqGXuJbW987iqM';
 
 const PROMPT = `This image is a poker tournament dealer "down card". Each row/slot is one ~30-minute dealing "down"; a dealer writes their name and sometimes a badge/employee number on the row they worked. Extract every FILLED-IN row (ignore blank rows and any printed headers/labels).
 Return ONLY minified JSON, no prose: {"entries":[{"name":"","badge":""}]}. Use an empty string when a field is missing. One object per filled row (a dealer may appear on several rows).`;
 
 async function verifyCaller(req) {
-  const anon = process.env.SUPABASE_ANON_KEY;
-  if (!anon) return true; // verification disabled if not configured
   const auth = req.headers['authorization'] || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
   if (!token) return false;
   try {
     const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-      headers: { Authorization: `Bearer ${token}`, apikey: anon },
+      headers: { Authorization: `Bearer ${token}`, apikey: SUPABASE_ANON },
     });
     return r.ok;
   } catch { return false; }
