@@ -1,0 +1,16 @@
+{
+  "id": "/",
+  "name": "TCH Workforce",
+  "short_name": "TCH Workforce",
+  "description": "Scheduling, shifts, time clock, and team communication for Texas Card House.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0c0d10",
+  "theme_color": "#0c2340",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
