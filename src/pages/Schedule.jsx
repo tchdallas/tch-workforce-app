@@ -15,6 +15,7 @@ import ShiftModal from '@/components/schedule/ShiftModal';
 import ViewDropdown, { getViewConfig } from '@/components/schedule/ViewDropdown';
 import ImportPaylocityModal from '@/components/schedule/ImportPaylocityModal';
 import PasteRoleWarningDialog from '@/components/schedule/PasteRoleWarningDialog';
+import PasteConflictDialog from '@/components/schedule/PasteConflictDialog';
 import PublishButton from '@/components/schedule/PublishButton';
 import DayViewSummary from '@/components/schedule/DayViewSummary';
 import DayTimeline from '@/components/schedule/DayTimeline';
@@ -35,7 +36,11 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
   const queryClient = useQueryClient();
   const [weekStart, setWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 0 }));
   const [selectedLocation, setSelectedLocation] = useState('');
-  const [viewKey, setViewKey] = useState('role_week');
+  // remember the last view they used, per device
+  const [viewKey, setViewKey] = useState(() => {
+    try { return localStorage.getItem('tch-schedule-view') || 'role_week'; } catch { return 'role_week'; }
+  });
+  useEffect(() => { try { localStorage.setItem('tch-schedule-view', viewKey); } catch { /* ignore */ } }, [viewKey]);
   const { groupBy: viewMode, days: spanDays } = getViewConfig(viewKey);
   const [shiftModal, setShiftModal] = useState({ open: false, shift: null });
   const [memberModal, setMemberModal] = useState({ open: false, member: null });
@@ -54,6 +59,7 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
   const [selectedShiftIds, setSelectedShiftIds] = useState(new Set());
   // Role-warning dialog for paste
   const [pasteWarning, setPasteWarning] = useState(null); // { context, missingRoles, pendingShifts }
+  const [pasteConflict, setPasteConflict] = useState(null); // double-book on paste: { payloads, mode, originalShifts, info, single }
   // Undo/redo history. Entry shapes:
   //   { type: 'create', id, data }               undo = delete, redo = re-create
   //   { type: 'update', id, prevData, newData }  undo = restore prev, redo = re-apply
@@ -480,10 +486,9 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
   // Execute the actual paste (after any role-warning confirmation).
   // Batched for speed, and the whole paste (plus a cut's removals) is one
   // undoable step.
-  const executePaste = useCallback(async (context, shiftsToPaste, mode, originalShifts) => {
+  // Build the shift row(s) a paste would create (without writing them)
+  const buildPastePayloads = useCallback((context, shiftsToPaste) => {
     const targetTmId = context.teamMemberId || shiftsToPaste[0]?.teamMemberId || '';
-
-    let payloads;
     if (shiftsToPaste.length === 1) {
       // Single shift paste: land on the provided date, keep the time of day
       const shift = shiftsToPaste[0];
@@ -491,7 +496,7 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
       start.setHours(new Date(shift.startDateTime).getHours(), new Date(shift.startDateTime).getMinutes(), 0, 0);
       const durationMs = new Date(shift.endDateTime) - new Date(shift.startDateTime);
       const end = new Date(start.getTime() + durationMs);
-      payloads = [{
+      return [{
         ...cleanShiftData(shift),
         startDateTime: start.toISOString(),
         endDateTime: end.toISOString(),
@@ -501,17 +506,18 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
         recentChangeFlag: false,
         status: 'draft',
       }];
-    } else {
-      // Multi-shift paste: preserve each shift's day and time, reassign member
-      payloads = shiftsToPaste.map(shift => ({
-        ...cleanShiftData(shift),
-        teamMemberId: targetTmId,
-        coverageStatus: 'covered',
-        recentChangeFlag: false,
-        status: 'draft',
-      }));
     }
+    // Multi-shift paste: preserve each shift's day and time, reassign member
+    return shiftsToPaste.map(shift => ({
+      ...cleanShiftData(shift),
+      teamMemberId: targetTmId,
+      coverageStatus: 'covered',
+      recentChangeFlag: false,
+      status: 'draft',
+    }));
+  }, []);
 
+  const writePastePayloads = useCallback(async (payloads, mode, originalShifts) => {
     const created = await base44.entities.Shift.bulkCreate(payloads);
     const undoEntries = created.map(c => ({ type: 'create', id: c.id, data: c }));
 
@@ -526,11 +532,16 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
     pushUndo(undoEntries.length === 1 ? undoEntries[0] : { type: 'batch', label: 'paste', entries: undoEntries });
 
     queryClient.invalidateQueries({ queryKey: ['schedule-shifts'] });
+    const n = payloads.length;
     toast.success(mode === 'cut'
-      ? `${shiftsToPaste.length} shift${shiftsToPaste.length > 1 ? 's' : ''} moved`
-      : `${shiftsToPaste.length} shift${shiftsToPaste.length > 1 ? 's' : ''} pasted`
+      ? `${n} shift${n > 1 ? 's' : ''} moved`
+      : `${n} shift${n > 1 ? 's' : ''} pasted`
     );
   }, [queryClient, pushUndo]);
+
+  const executePaste = useCallback(async (context, shiftsToPaste, mode, originalShifts) => {
+    await writePastePayloads(buildPastePayloads(context, shiftsToPaste), mode, originalShifts);
+  }, [buildPastePayloads, writePastePayloads]);
 
   const handlePaste = useCallback(async (context) => {
     if (!clipboard) return;
@@ -556,8 +567,33 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
       }
     }
 
-    await executePaste(context, clipShifts, mode, clipShifts);
-  }, [clipboard, teamMembers, roles, executePaste]);
+    // Double-book check: would the assigned member already be scheduled then?
+    const payloads = buildPastePayloads(context, clipShifts);
+    const overlaps = (aS, aE, bS, bE) => aS < bE && bS < aE;
+    const cutIds = mode === 'cut' ? new Set(clipShifts.map(s => s.id)) : new Set();
+    const conflicts = [];
+    payloads.forEach(p => {
+      if (!p.teamMemberId) return; // open shift — nothing to double-book
+      const pS = new Date(p.startDateTime), pE = new Date(p.endDateTime);
+      const clash = shifts.find(s => s.teamMemberId === p.teamMemberId && s.status !== 'cancelled'
+        && !cutIds.has(s.id) && overlaps(pS, pE, new Date(s.startDateTime), new Date(s.endDateTime)));
+      if (clash) conflicts.push({ payload: p, existing: clash });
+    });
+    if (conflicts.length) {
+      const info = conflicts.map(c => {
+        const m = teamMembers.find(t => t.id === c.payload.teamMemberId);
+        const role = roles.find(r => r.id === c.existing.roleId);
+        return {
+          name: m ? `${m.preferredName || m.firstName} ${m.lastName}` : 'This team member',
+          when: `${format(new Date(c.existing.startDateTime), 'EEE MMM d, h:mm a')} – ${format(new Date(c.existing.endDateTime), 'h:mm a')}`,
+          roleName: role?.name || '',
+        };
+      });
+      setPasteConflict({ payloads, mode, originalShifts: clipShifts, info, single: payloads.length === 1 });
+      return;
+    }
+    await writePastePayloads(payloads, mode, clipShifts);
+  }, [clipboard, teamMembers, roles, shifts, buildPastePayloads, writePastePayloads]);
 
   const handlePublishToggle = useCallback((shift, revert = false) => {
     updateShift.mutate({ id: shift.id, data: { status: revert ? 'draft' : 'published' } });
@@ -1038,6 +1074,36 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
             setPasteWarning(null);
             await executePaste(context, pendingShifts, mode, originalShifts);
           }
+        }}
+      />
+
+      <PasteConflictDialog
+        open={!!pasteConflict}
+        onClose={() => setPasteConflict(null)}
+        info={pasteConflict?.info || []}
+        single={pasteConflict?.single}
+        onCreateOpen={() => {
+          if (!pasteConflict) return;
+          const openPayloads = pasteConflict.payloads.map(p => ({ ...p, teamMemberId: null, shiftType: 'open' }));
+          writePastePayloads(openPayloads, pasteConflict.mode, pasteConflict.originalShifts);
+          setPasteConflict(null);
+        }}
+        onScheduleAnyway={() => {
+          if (!pasteConflict) return;
+          writePastePayloads(pasteConflict.payloads, pasteConflict.mode, pasteConflict.originalShifts);
+          setPasteConflict(null);
+        }}
+        onAssignOther={() => {
+          if (!pasteConflict) return;
+          const p = pasteConflict.payloads[0];
+          setPasteConflict(null);
+          setShiftModal({ open: true, shift: {
+            locationId: p.locationId || selectedLocation || '',
+            roleId: p.roleId || '',
+            teamMemberId: '',
+            startDateTime: format(new Date(p.startDateTime), "yyyy-MM-dd'T'HH:mm"),
+            endDateTime: format(new Date(p.endDateTime), "yyyy-MM-dd'T'HH:mm"),
+          } });
         }}
       />
 
