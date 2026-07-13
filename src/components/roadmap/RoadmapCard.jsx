@@ -55,9 +55,11 @@ export default function RoadmapCard({ shift, teamMember, role, location, status,
   const end = new Date(shift.endDateTime);
   const config = statusConfig[status] || statusConfig.on_shift;
 
+  // A shift with an assignee whose name we couldn't resolve (RLS hid the row and
+  // it wasn't in the directory) still reads as filled — never mislabel it "Open Shift".
   const displayName = teamMember
     ? (teamMember.preferredName || teamMember.firstName) + ' ' + teamMember.lastName
-    : 'Open Shift';
+    : shift.teamMemberId ? 'Scheduled' : 'Open Shift';
 
   const timeInfo = () => {
     if (status === 'coming_soon') {

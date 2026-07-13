@@ -9,12 +9,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
-  Calendar, Users, AlertTriangle, ClipboardList, HandHelping, Radio,
-  Plus, ArrowRight, Clock, User, CalendarCheck
+  Calendar, AlertTriangle, ClipboardList, HandHelping,
+  Plus, ArrowRight, Clock
 } from 'lucide-react';
 import PageHeader from '@/components/common/PageHeader';
 import StatCard from '@/components/common/StatCard';
 import ActionItems from '@/components/dashboard/ActionItems';
+import QuickActions from '@/components/dashboard/QuickActions';
 import AnnouncementBanner from '@/components/common/AnnouncementBanner';
 import LocationSelector from '@/components/common/LocationSelector';
 import { useLocationFilter } from '@/hooks/useLocationFilter';
@@ -29,7 +30,7 @@ export default function Dashboard() {
 
   const { selectedLocation, setSelectedLocation, allowedIds, isLocked, isAll, locationId, locationQuery } = useLocationFilter();
   const { data: teamMembers = [] } = useTeamMembers();
-  const { member, isTeamMember } = useCurrentMember();
+  const { member, isTeamMember, isManager, isAdmin } = useCurrentMember();
 
   const today = new Date();
   const todayStr = format(today, "yyyy-MM-dd'T'00:00:00");
@@ -114,33 +115,7 @@ export default function Dashboard() {
         </div>
 
         <div className="grid lg:grid-cols-2 gap-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Quick Actions</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-2">
-              <Link to="/my-schedule">
-                <Button variant="outline" className="w-full justify-start gap-2 h-12">
-                  <CalendarCheck className="w-4 h-4" /> My Schedule
-                </Button>
-              </Link>
-              <Link to="/open-shifts">
-                <Button variant="outline" className="w-full justify-start gap-2 h-12">
-                  <HandHelping className="w-4 h-4" /> Open Shifts
-                </Button>
-              </Link>
-              <Link to="/roadmap">
-                <Button variant="outline" className="w-full justify-start gap-2 h-12">
-                  <Radio className="w-4 h-4" /> Live Roadmap
-                </Button>
-              </Link>
-              <Link to="/my-profile">
-                <Button variant="outline" className="w-full justify-start gap-2 h-12">
-                  <User className="w-4 h-4" /> My Profile
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
+          <QuickActions isManager={isManager} isAdmin={isAdmin} memberId={member?.id} />
 
           <Card>
             <CardHeader className="pb-3">
@@ -209,37 +184,8 @@ export default function Dashboard() {
       </div>
 
       <div className="grid lg:grid-cols-2 gap-4">
-        {/* Quick Actions */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Quick Actions</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-2">
-            <Link to="/schedule">
-              <Button variant="outline" className="w-full justify-start gap-2 h-12">
-                <Calendar className="w-4 h-4" /> Schedule
-              </Button>
-            </Link>
-            <Link to="/roadmap">
-              <Button variant="outline" className="w-full justify-start gap-2 h-12">
-                <Radio className="w-4 h-4" /> Live Roadmap
-              </Button>
-            </Link>
-            <Link to="/team-members">
-              <Button variant="outline" className="w-full justify-start gap-2 h-12">
-                <Users className="w-4 h-4" /> Team Members
-              </Button>
-            </Link>
-            <Link to="/requests">
-              <Button variant="outline" className="w-full justify-start gap-2 h-12">
-                <ClipboardList className="w-4 h-4" /> Requests
-                {pendingRequests > 0 && (
-                  <Badge className="ml-auto bg-primary text-primary-foreground text-xs">{pendingRequests}</Badge>
-                )}
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
+        {/* Quick Actions — user-customizable */}
+        <QuickActions isManager={isManager} isAdmin={isAdmin} memberId={member?.id} />
 
         {/* Unpublished Schedules */}
         <Card>

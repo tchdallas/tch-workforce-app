@@ -15,6 +15,7 @@ import LocationSelector from '@/components/common/LocationSelector';
 import RoadmapCard from '@/components/roadmap/RoadmapCard';
 import RoadmapShiftActionModal from '@/components/roadmap/RoadmapShiftActionModal';
 import { useLocations, useRoles, useTeamMembers } from '@/lib/useAppData';
+import { useMessagingDirectory } from '@/lib/messaging';
 import { useCurrentMember } from '@/hooks/useCurrentMember';
 import { useMutation } from '@tanstack/react-query';
 import { format as formatDate } from 'date-fns';
@@ -34,7 +35,7 @@ export default function LiveRoadmap() {
   };
   const handleRefresh = () => invalidateRoadmap();
   const { pullDistance, refreshing } = usePullToRefresh(handleRefresh);
-  const { isManager } = useCurrentMember();
+  const { isManager, member } = useCurrentMember();
 
   const handleMarkCallout = async (shift) => {
     await base44.entities.Shift.update(shift.id, { coverageStatus: 'callout', recentChangeFlag: true });
@@ -90,6 +91,12 @@ export default function LiveRoadmap() {
   const { data: locations } = useLocations();
   const { data: roles } = useRoles();
   const { data: teamMembers } = useTeamMembers();
+  // Team members can't read coworkers' rows under RLS, so useTeamMembers only
+  // returns themselves + anyone they manage. Without this, every coworker's
+  // scheduled shift fell through to the "Open Shift" label. The messaging
+  // directory RPC resolves names for coworkers who share a location (same feed
+  // the clocked-in list already trusts).
+  const { data: directory = [] } = useMessagingDirectory(member?.id);
 
   const { data: availabilities = [] } = useQuery({
     queryKey: ['availabilities'],
@@ -185,7 +192,15 @@ export default function LiveRoadmap() {
     return groups;
   }, [filteredShifts, calloutShiftIds, clockedInMemberIds]); // eslint-disable-line
 
-  const getTeamMember = (id) => teamMembers.find(tm => tm.id === id);
+  // full teamMembers rows (managers) win over directory entries (coworker names
+  // for team-member viewers); directory fills the gaps RLS leaves behind
+  const memberById = useMemo(() => {
+    const map = new Map();
+    (directory || []).forEach(m => map.set(m.id, m));
+    (teamMembers || []).forEach(m => map.set(m.id, m));
+    return map;
+  }, [teamMembers, directory]);
+  const getTeamMember = (id) => (id ? memberById.get(id) : undefined);
   const getRole = (id) => roles.find(r => r.id === id);
 
   // rows backed by a punch rather than a shift record
