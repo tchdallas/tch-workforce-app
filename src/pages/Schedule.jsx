@@ -438,11 +438,11 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
     }
   };
 
-  const handleAddShift = ({ date, roleId, teamMemberId }) => {
+  const handleAddShift = ({ date, roleId, teamMemberId, startHour }) => {
     const start = new Date(date);
-    start.setHours(9, 0, 0, 0);
-    const end = new Date(date);
-    end.setHours(17, 0, 0, 0);
+    start.setHours(startHour != null ? startHour : 9, 0, 0, 0);
+    // default 8-hour shift; date math carries it past midnight correctly
+    const end = new Date(start.getTime() + 8 * 60 * 60 * 1000);
     setShiftModal({
       open: true,
       shift: {

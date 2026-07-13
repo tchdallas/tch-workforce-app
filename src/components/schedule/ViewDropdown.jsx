@@ -27,6 +27,7 @@ const ALL_OPTIONS = [...ROLE_OPTIONS, ...MEMBER_OPTIONS, ...SUMMARY_OPTIONS];
 export function getViewConfig(viewKey) {
   const defaults = { groupBy: 'role', days: 7 };
   if (!viewKey) return defaults;
+  if (viewKey === 'role_time') return { groupBy: 'role_time', days: 7 };
   if (viewKey === 'summary_day') return { groupBy: 'summary', days: 1 };
   if (viewKey === 'timeline_day') return { groupBy: 'timeline', days: 1 };
   const [group, span] = viewKey.split('_');
@@ -36,6 +37,7 @@ export function getViewConfig(viewKey) {
 }
 
 export function getViewLabel(viewKey) {
+  if (viewKey === 'role_time') return 'Time Grid';
   if (viewKey === 'summary_day') return 'Day Summary';
   if (viewKey === 'timeline_day') return 'Day Timeline';
   const opt = ALL_OPTIONS.find(o => o.value === viewKey);
@@ -81,6 +83,15 @@ export default function ViewDropdown({ value = 'role_week', onChange }) {
               {opt.label}
             </button>
           ))}
+          <button
+            onClick={() => select('role_time')}
+            className={cn(
+              "w-full text-left px-4 py-1.5 text-sm hover:bg-muted/60 transition-colors",
+              value === 'role_time' && "text-primary font-medium"
+            )}
+          >
+            Time Grid <span className="text-[10px] text-muted-foreground">· by hour</span>
+          </button>
 
           <div className="my-1.5 border-t border-border" />
 

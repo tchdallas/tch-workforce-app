@@ -192,7 +192,9 @@ export default function ScheduleGrid({
   });
 
   const renderCell = (day, cellKey, filterFn, addContext, visibleShiftIds) => {
-    const dayShifts = getShiftsForDay(day, filterFn);
+    // sort by start time so a newly-added shift drops into the right spot
+    const dayShifts = getShiftsForDay(day, filterFn)
+      .slice().sort((a, b) => new Date(a.startDateTime) - new Date(b.startDateTime));
     const isDragOver = !readOnly && dragOverCell === cellKey;
     const isPasteMode = !readOnly && !!clipboard;
     // subtle availability cue for member rows: their weekly type for this day
@@ -382,6 +384,82 @@ export default function ScheduleGrid({
 
   // Reset ref arrays before each render so stale nodes don't accumulate
   rowRefs.current = {};
+
+  // Role × Time grid: expand a role to see the whole gaming day as hourly rows,
+  // add a shift to any hour/day cell and pick the team member.
+  if (viewMode === 'role_time') {
+    const HOURS = Array.from({ length: 24 }, (_, i) => (dayStartHour + i) % 24); // 4a → 3a
+    const hourLabel = (h) => { const d = new Date(); d.setHours(h, 0, 0, 0); return format(d, 'h a'); };
+    return (
+      <div style={{ minWidth: `${160 + spanDays * (isCompact ? 60 : 80)}px` }}>
+        <div className="grid border-b border-border sticky top-0 bg-card z-10" style={gridStyle}>
+          <div className="p-2 text-xs font-semibold text-muted-foreground flex items-center">Time / Role</div>
+          {days.map(day => (
+            <div key={day.toISOString()} className="p-2 text-center border-l border-border">
+              <p className="text-[10px] text-muted-foreground uppercase">{format(day, isCompact ? 'EEEEE' : 'EEE')}</p>
+              <p className="text-sm font-semibold">{format(day, 'd')}</p>
+            </div>
+          ))}
+        </div>
+
+        {filteredRoles.map(role => {
+          const isCollapsed = collapsedRoles.has(role.id);
+          // par per day (which day is short/over) + role summary
+          let roleShort = 0, roleOver = 0, roleHasPar = false;
+          const dayPar = days.map(day => {
+            const cov = parWindows.length
+              ? roleDayCoverage(parWindows, shifts, role.id, day, dayStartHour, selectedLocation) : [];
+            if (cov.length) roleHasPar = true;
+            const short = cov.filter(c => c.status === 'short').length;
+            const over = cov.filter(c => c.status === 'over').length;
+            roleShort += short; roleOver += over;
+            return { short, over, hasPar: cov.length > 0 };
+          });
+          return (
+            <div key={role.id}>
+              <div
+                className="grid bg-muted/50 border-b border-border cursor-pointer hover:bg-muted/70 transition-colors sticky top-[57px] z-[5]"
+                style={gridStyle}
+                onClick={() => toggleRole(role.id)}
+              >
+                <div className="p-2 flex items-center gap-2 min-w-0">
+                  {isCollapsed
+                    ? <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                    : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
+                  <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: role.color || '#6366f1' }} />
+                  <span className="text-xs font-semibold truncate">{role.name}</span>
+                  {roleShort > 0 ? (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 shrink-0">{roleShort} under par</span>
+                  ) : roleOver > 0 ? (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 shrink-0">{roleOver} over par</span>
+                  ) : null}
+                </div>
+                {dayPar.map((dp, di) => (
+                  <div key={di} className="flex items-center justify-center p-1 border-l border-border/30">
+                    {dp.short > 0 ? <span className="text-[9px] leading-none px-1 py-0.5 rounded font-semibold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">Under</span>
+                      : dp.over > 0 ? <span className="text-[9px] leading-none px-1 py-0.5 rounded font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">Over</span>
+                        : dp.hasPar ? <span className="text-[10px] text-emerald-600/60 dark:text-emerald-400/60">✓</span> : null}
+                  </div>
+                ))}
+              </div>
+              {!isCollapsed && HOURS.map(h => (
+                <div key={h} className="grid border-b border-border/40 hover:bg-muted/5 transition-colors" style={gridStyle}>
+                  <div className="px-2 py-1 text-[11px] font-medium text-muted-foreground flex items-center border-r border-border/40">{hourLabel(h)}</div>
+                  {days.map(day => renderCell(
+                    day,
+                    `${role.id}-h${h}-${day.toISOString()}`,
+                    s => s.roleId === role.id && new Date(s.startDateTime).getHours() === h,
+                    { roleId: role.id, startHour: h },
+                    visibleShiftIds
+                  ))}
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
 
   if (viewMode === 'role') {
     // Collect role IDs present in filteredRoles for lookup
