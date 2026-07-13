@@ -406,40 +406,60 @@ export default function ScheduleGrid({
             const openShiftsForRole = shifts.filter(s => s.roleId === role.id && !s.teamMemberId);
             const hasOpenShifts = openShiftsForRole.length > 0;
             const isCollapsed = collapsedRoles.has(role.id);
-            // par coverage across the visible days for this role
-            let roleShort = 0, roleHasPar = false;
-            if (parWindows.length) days.forEach(day => {
-              const cov = roleDayCoverage(parWindows, shifts, role.id, day, dayStartHour, selectedLocation);
+            // par coverage per visible day for this role — drives both the
+            // per-day badges (which DAY is off) and the role summary (which ROLE)
+            let roleShort = 0, roleOver = 0, roleHasPar = false;
+            const dayPar = days.map(day => {
+              const cov = parWindows.length
+                ? roleDayCoverage(parWindows, shifts, role.id, day, dayStartHour, selectedLocation) : [];
               if (cov.length) roleHasPar = true;
-              roleShort += cov.filter(c => c.status === 'short').length;
+              const short = cov.filter(c => c.status === 'short').length;
+              const over = cov.filter(c => c.status === 'over').length;
+              roleShort += short; roleOver += over;
+              return { short, over, hasPar: cov.length > 0 };
             });
             return (
               <div key={role.id}>
                 <div
                   className="grid bg-muted/50 border-b border-border cursor-pointer hover:bg-muted/70 transition-colors"
-                  style={{ gridTemplateColumns: '1fr' }}
+                  style={gridStyle}
                   onClick={() => toggleRole(role.id)}
                 >
-                  <div className="p-2 flex items-center gap-2">
+                  <div className="p-2 flex items-center gap-2 min-w-0">
                     {isCollapsed
-                      ? <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
-                      : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+                      ? <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                      : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                     }
-                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: role.color || '#6366f1' }} />
-                    <span className="text-xs font-semibold">{role.name}</span>
-                    <span className="text-[10px] text-muted-foreground">
+                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: role.color || '#6366f1' }} />
+                    <span className="text-xs font-semibold truncate">{role.name}</span>
+                    <span className="text-[10px] text-muted-foreground shrink-0">
                       ({roleTeamMembers.length}{hasOpenShifts ? <> + <span className="text-red-500 font-semibold">{openShiftsForRole.length} open</span></> : ''})
                     </span>
                     {roleShort > 0 ? (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300" title="Understaffed par windows this week">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 shrink-0" title="Understaffed — see the flagged days">
                         {roleShort} under par
                       </span>
+                    ) : roleOver > 0 ? (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 shrink-0" title="Overstaffed — see the flagged days">
+                        {roleOver} over par
+                      </span>
                     ) : roleHasPar ? (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" title="All par windows met this week">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 shrink-0" title="All par windows met this week">
                         par met
                       </span>
                     ) : null}
                   </div>
+                  {dayPar.map((dp, di) => (
+                    <div key={di} className="flex items-center justify-center p-1 border-l border-border/30">
+                      {dp.short > 0 ? (
+                        <span className="text-[9px] leading-none px-1 py-0.5 rounded font-semibold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300" title={`${dp.short} par window(s) understaffed`}>Under</span>
+                      ) : dp.over > 0 ? (
+                        <span className="text-[9px] leading-none px-1 py-0.5 rounded font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" title={`${dp.over} par window(s) overstaffed`}>Over</span>
+                      ) : dp.hasPar ? (
+                        <span className="text-[10px] text-emerald-600/60 dark:text-emerald-400/60" title="Par met">✓</span>
+                      ) : null}
+                    </div>
+                  ))}
                 </div>
                 {!isCollapsed && (
                   <>
