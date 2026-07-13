@@ -526,7 +526,26 @@ const users = {
       email: addr,
       options: { shouldCreateUser: true, emailRedirectTo: APP_URL },
     });
-    if (error) throw error;
+    if (error) {
+      // Supabase auth errors sometimes arrive with an empty/opaque body, which
+      // stringifies to "{}". Turn that into something a manager can act on.
+      const status = error.status || error.code;
+      const raw = (error.message || '').trim();
+      const rateLimited = status === 429 || /rate limit|after \d+ second/i.test(raw);
+      let msg;
+      if (rateLimited) {
+        msg = raw && raw !== '{}'
+          ? `${raw} — invite emails are rate-limited; wait a minute and try again.`
+          : 'Too many invite emails too quickly — wait a minute, then try again.';
+      } else if (!raw || raw === '{}') {
+        msg = "The invite email couldn't be sent. The email service may be over its limit or misconfigured — check Supabase → Authentication → Email/SMTP, then try again.";
+      } else {
+        msg = raw;
+      }
+      const wrapped = new Error(msg);
+      wrapped.status = status;
+      throw wrapped;
+    }
     // record the invite so the roster can show "Invited"; non-fatal if it
     // doesn't match a row the caller can update
     await supabase.from('team_members')
