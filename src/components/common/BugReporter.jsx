@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
@@ -55,6 +55,21 @@ export default function BugReporter() {
   const [includeShot, setIncludeShot] = useState(true);
   const [showTech, setShowTech] = useState(false);
   const [form, setForm] = useState(empty);
+  const [inputFocused, setInputFocused] = useState(false);
+
+  // Hide the floating button while someone is typing in a field, so it never
+  // covers a page's own controls (e.g. the Messages send button on mobile).
+  useEffect(() => {
+    const editable = (el) => el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+    const onIn = (e) => { if (editable(e.target)) setInputFocused(true); };
+    const onOut = () => setInputFocused(false);
+    document.addEventListener('focusin', onIn);
+    document.addEventListener('focusout', onOut);
+    return () => {
+      document.removeEventListener('focusin', onIn);
+      document.removeEventListener('focusout', onOut);
+    };
+  }, []);
 
   const openReporter = async () => {
     setForm(empty);
@@ -120,9 +135,12 @@ export default function BugReporter() {
         onClick={openReporter}
         title="Report a bug"
         aria-label="Report a bug"
-        className="fixed right-4 bottom-20 lg:bottom-6 z-40 flex items-center gap-2 h-11 pl-3 pr-4 rounded-full
+        className={cn(
+          `fixed right-4 bottom-20 lg:bottom-6 z-40 flex items-center gap-2 h-11 pl-3 pr-4 rounded-full
           bg-foreground text-background shadow-lg border border-border/40
-          hover:opacity-90 active:scale-95 transition-all text-sm font-medium"
+          hover:opacity-90 active:scale-95 transition-all text-sm font-medium`,
+          inputFocused && 'hidden'
+        )}
       >
         <Bug className="w-4 h-4" />
         <span className="hidden sm:inline">Report a bug</span>
