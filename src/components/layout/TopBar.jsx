@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bell, Menu, Sun, Moon, Monitor, ChevronLeft } from 'lucide-react';
+import { Bell, Menu, Sun, Moon, Monitor, ChevronLeft, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/lib/ThemeContext';
 import {
@@ -10,7 +10,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 const ROOT_PATHS = new Set(['/', '/schedule', '/roadmap', '/open-shifts']);
 
-export default function TopBar({ onMobileMenuOpen }) {
+export default function TopBar({ onMobileMenuOpen, onHelp }) {
   const { theme, setTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
@@ -59,6 +59,10 @@ export default function TopBar({ onMobileMenuOpen }) {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        <Button variant="ghost" size="icon" onClick={onHelp} title="App tour" aria-label="App tour">
+          <HelpCircle className="w-4 h-4" />
+        </Button>
 
         <Link to="/notifications">
           <Button variant="ghost" size="icon" className="relative">

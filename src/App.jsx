@@ -32,6 +32,7 @@ import Attendance from '@/pages/Attendance';
 import Messages from '@/pages/Messages';
 import Announcements from '@/pages/Announcements';
 import Downs from '@/pages/Downs';
+import BugReports from '@/pages/BugReports';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, isAuthenticated, authError } = useAuth();
@@ -76,6 +77,7 @@ const AuthenticatedApp = () => {
         <Route path="/timesheets" element={<Timesheets />} />
         <Route path="/attendance" element={<Attendance />} />
         <Route path="/downs" element={<Downs />} />
+        <Route path="/bug-reports" element={<BugReports />} />
       </Route>
       {/* fullscreen kiosk — no app chrome */}
       <Route path="/kiosk" element={<Kiosk />} />

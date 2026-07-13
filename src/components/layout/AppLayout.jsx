@@ -6,7 +6,10 @@ import TopBar from './TopBar';
 import MobileMenu from './MobileMenu';
 import { ThemeProvider } from '@/lib/ThemeContext';
 import PageTransition from '@/components/common/PageTransition';
+import BugReporter from '@/components/common/BugReporter';
+import TutorialModal from '@/components/common/TutorialModal';
 import { useLocations, useRoles, useTeamMembers } from '@/lib/useAppData';
+import { useCurrentMember } from '@/hooks/useCurrentMember';
 import useRealtimeNotifications from '@/hooks/useRealtimeNotifications';
 import useVersionCheck from '@/hooks/useVersionCheck';
 
@@ -25,7 +28,21 @@ export default function AppLayout() {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [tutorialOpen, setTutorialOpen] = useState(false);
+  const { member } = useCurrentMember();
   const location = useLocation();
+
+  // First time this person opens the app on this device, run the tour once.
+  useEffect(() => {
+    if (!member?.id) return;
+    const key = `tch-tutorial-seen-${member.id}`;
+    try {
+      if (!localStorage.getItem(key)) {
+        setTutorialOpen(true);
+        localStorage.setItem(key, '1');
+      }
+    } catch { /* private mode — just skip the auto-tour */ }
+  }, [member?.id]);
   const mainRef = useRef(null);
   const scrollPositions = useRef({});
 
@@ -59,7 +76,7 @@ export default function AppLayout() {
         <MobileMenu open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
 
         <div className="flex-1 flex flex-col min-w-0 h-full">
-          <TopBar onMobileMenuOpen={() => setMobileMenuOpen(true)} />
+          <TopBar onMobileMenuOpen={() => setMobileMenuOpen(true)} onHelp={() => setTutorialOpen(true)} />
           <main
             ref={mainRef}
             className="flex-1 p-4 lg:p-6 pb-20 lg:pb-6 overflow-x-hidden overflow-y-auto"
@@ -70,6 +87,8 @@ export default function AppLayout() {
         </div>
 
         <MobileNav />
+        <BugReporter />
+        <TutorialModal open={tutorialOpen} onClose={() => setTutorialOpen(false)} />
       </div>
     </ThemeProvider>
   );

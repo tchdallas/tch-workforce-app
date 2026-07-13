@@ -4,7 +4,7 @@
 import {
   LayoutDashboard, Radio, Calendar, CalendarCheck, LayoutTemplate, HandHelping,
   ClipboardList, AlertTriangle, Clock, Trophy, Users, UserCheck, MessageSquare,
-  Megaphone, BarChart3, Activity, MapPin, Shield, Target, Settings, Bell, User,
+  Megaphone, BarChart3, Activity, MapPin, Shield, Target, Settings, Bell, User, Bug,
 } from 'lucide-react';
 
 export const navGroups = [
@@ -37,6 +37,7 @@ export const navGroups = [
   { label: 'Insights', items: [
     { label: 'Reports', icon: BarChart3, path: '/reports', managerOnly: true },
     { label: 'Audit Log', icon: Activity, path: '/audit-log', managerOnly: true },
+    { label: 'Bug Reports', icon: Bug, path: '/bug-reports', managerOnly: true },
   ] },
   { label: 'Setup', items: [
     { label: 'Locations', icon: MapPin, path: '/locations', managerOnly: true },

@@ -56,7 +56,7 @@ export default function Callouts() {
                   <div>
                     <p className="font-semibold text-sm">{getName(callout.teamMemberId)}</p>
                     <p className="text-xs text-muted-foreground">
-                      {getRoleName(callout.roleId)} Â· {getLocName(callout.locationId)}
+                      {getRoleName(callout.roleId)} · {getLocName(callout.locationId)}
                     </p>
                     {callout.reason && <p className="text-xs mt-1">{callout.reason}</p>}
                     {callout.submittedAt && (
