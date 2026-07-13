@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { format, addDays, isSameDay } from 'date-fns';
 import { cn, businessDayOf } from '@/lib/utils';
-import { Plus, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
 import ShiftCard from './ShiftCard';
 import { roleDayCoverage } from '@/lib/parCoverage';
 
@@ -87,6 +87,22 @@ export default function ScheduleGrid({
   // Include active roles, plus any role referenced by open shifts (even if archived)
   const openShiftRoleIds = new Set(shifts.filter(s => !s.teamMemberId && s.roleId).map(s => s.roleId));
   const filteredRoles = roles.filter(r => r.status === 'active' || openShiftRoleIds.has(r.id));
+
+  // Collapse / expand every role group at once
+  const allRolesCollapsed = filteredRoles.length > 0 && filteredRoles.every(r => collapsedRoles.has(r.id));
+  const toggleAllRoles = () => setCollapsedRoles(allRolesCollapsed ? new Set() : new Set(filteredRoles.map(r => r.id)));
+  const CollapseAllToggle = () => (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); toggleAllRoles(); }}
+      title={allRolesCollapsed ? 'Expand all roles' : 'Collapse all roles'}
+      aria-label={allRolesCollapsed ? 'Expand all roles' : 'Collapse all roles'}
+      className="ml-auto p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+    >
+      {allRolesCollapsed ? <ChevronsUpDown className="w-3.5 h-3.5" /> : <ChevronsDownUp className="w-3.5 h-3.5" />}
+    </button>
+  );
+
   const locationMembers = teamMembers.filter(tm => {
     if (tm.status !== 'active') return false;
     if (selectedLocation && selectedLocation !== 'all') {
@@ -255,8 +271,9 @@ export default function ScheduleGrid({
 
   const DayHeader = () => (
     <>
-      <div className="p-2 text-xs font-semibold text-muted-foreground">
+      <div className="p-2 text-xs font-semibold text-muted-foreground flex items-center gap-1">
         {viewMode === 'role' ? 'Role / Team Member' : 'Team Member'}
+        {viewMode === 'role' && <CollapseAllToggle />}
       </div>
       {days.map(day => (
         <div key={day.toISOString()} className={cn(
@@ -393,7 +410,7 @@ export default function ScheduleGrid({
     return (
       <div style={{ minWidth: `${160 + spanDays * (isCompact ? 60 : 80)}px` }}>
         <div className="grid border-b border-border sticky top-0 bg-card z-10" style={gridStyle}>
-          <div className="p-2 text-xs font-semibold text-muted-foreground flex items-center">Time / Role</div>
+          <div className="p-2 text-xs font-semibold text-muted-foreground flex items-center gap-1">Time / Role<CollapseAllToggle /></div>
           {days.map(day => (
             <div key={day.toISOString()} className="p-2 text-center border-l border-border">
               <p className="text-[10px] text-muted-foreground uppercase">{format(day, isCompact ? 'EEEEE' : 'EEE')}</p>
