@@ -117,7 +117,26 @@ export const AuthProvider = ({ children }) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: APP_URL,
     });
-    if (error) throw error;
+    if (error) {
+      // GoTrue can return an opaque error that stringifies to "{}"; turn it into
+      // something the person can act on (same as the invite flow).
+      const status = error.status || error.code;
+      const raw = (error.message || '').trim();
+      const rateLimited = status === 429 || /rate limit|after \d+ second/i.test(raw);
+      let msg;
+      if (rateLimited) {
+        msg = raw && raw !== '{}'
+          ? `${raw} — reset emails are rate-limited; wait a minute and try again.`
+          : 'Too many password-reset emails too quickly — wait a minute, then try again.';
+      } else if (!raw || raw === '{}') {
+        msg = "The reset email couldn't be sent — the email service may be over its limit or misconfigured. Try again shortly.";
+      } else {
+        msg = raw;
+      }
+      const wrapped = new Error(msg);
+      wrapped.status = status;
+      throw wrapped;
+    }
   };
 
   const logout = async () => {
