@@ -101,7 +101,7 @@ export default function Login() {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="bg-white text-slate-900 rounded-xl shadow-sm border border-slate-200 p-6 space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="email">Email</Label>
             <Input
@@ -109,6 +109,7 @@ export default function Login() {
               type="email"
               autoComplete="email"
               placeholder="you@texascardhouse.com"
+              className="placeholder:text-slate-400"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
