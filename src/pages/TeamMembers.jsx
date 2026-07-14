@@ -6,7 +6,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Search, Mail, MapPin, UserPlus, Upload, Trash2, CheckSquare, Square, Undo2, Loader2, Users, Archive, ArchiveRestore, CheckCircle2 } from 'lucide-react';
+import { Plus, Search, Mail, MapPin, UserPlus, Upload, Trash2, CheckSquare, Square, Undo2, Loader2, Users, Archive, ArchiveRestore, CheckCircle2, Filter, LayoutGrid, List as ListIcon, ArrowUpDown, X, Check } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format } from 'date-fns';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -34,6 +35,29 @@ const statusLabels = { active: 'Active', inactive: 'Suspended', archived: 'Terme
 // blue "Invited" pill shown alongside for active members who haven't logged in
 // yet (no linked auth account), until they accept the invite / sign in
 const invitedPill = 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
+
+function FilterGroup({ title, options, selected, onToggle }) {
+  if (!options.length) return null;
+  return (
+    <div>
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">{title}</p>
+      <div className="space-y-0.5">
+        {options.map(opt => {
+          const on = selected.includes(opt.value);
+          return (
+            <button key={opt.value} type="button" onClick={() => onToggle(opt.value)}
+              className={cn('w-full flex items-center gap-2 px-2 py-1 rounded text-sm hover:bg-muted transition-colors', on && 'text-primary')}>
+              <span className={cn('w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0', on ? 'bg-primary border-primary' : 'border-input')}>
+                {on && <Check className="w-2.5 h-2.5 text-primary-foreground" />}
+              </span>
+              <span className="truncate">{opt.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export default function TeamMembers() {
   const queryClient = useQueryClient();
@@ -65,8 +89,21 @@ export default function TeamMembers() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [lastImportIds, setLastImportIds] = useState([]);
   const [undoingImport, setUndoingImport] = useState(false);
-  const [showArchived, setShowArchived] = useState(false);
+  // filters (multi-select) + view/sort — replaces the old "Hide Archived" toggle
+  const [statusFilter, setStatusFilter] = useState(['active', 'inactive']); // hide Termed by default
+  const [locationFilter, setLocationFilter] = useState([]); // empty = all
+  const [roleFilter, setRoleFilter] = useState([]);
+  const [viewMode, setViewMode] = useState(() => {
+    try { return localStorage.getItem('tch-tm-view') || 'card'; } catch { return 'card'; }
+  });
+  React.useEffect(() => { try { localStorage.setItem('tch-tm-view', viewMode); } catch { /* ignore */ } }, [viewMode]);
+  const [sortBy, setSortBy] = useState('name'); // name | status | location
+  const [sortDir, setSortDir] = useState('asc');
+  const showArchivedRows = statusFilter.includes('archived');
   const { isAdmin } = useCurrentMember();
+
+  const toggleIn = (setter) => (val) =>
+    setter(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
 
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -166,7 +203,7 @@ export default function TeamMembers() {
     queryKey: ['teamMembers-archived'],
     queryFn: () => base44.entities.TeamMember.filter({ status: 'archived' }, 'firstName'),
     placeholderData: [],
-    enabled: isAdmin && showArchived,
+    enabled: isAdmin && showArchivedRows,
   });
 
   const { pullDistance, refreshing } = usePullToRefresh(async () => {
@@ -183,16 +220,31 @@ export default function TeamMembers() {
   // dedupe: right after an archive/restore the two lists briefly overlap
   // (one query refetches before the other), which duplicates React keys
   const displayMembers = React.useMemo(() => {
-    if (!(isAdmin && showArchived)) return teamMembers;
+    if (!(isAdmin && showArchivedRows)) return teamMembers;
     const seen = new Set(teamMembers.map(m => m.id));
     return [...teamMembers, ...archivedMembers.filter(m => !seen.has(m.id))];
-  }, [teamMembers, archivedMembers, isAdmin, showArchived]);
+  }, [teamMembers, archivedMembers, isAdmin, showArchivedRows]);
   const editMember = editId ? displayMembers.find(tm => tm.id === editId) : null;
 
   const filtered = displayMembers.filter(tm => {
-    const name = `${tm.firstName} ${tm.lastName} ${tm.preferredName || ''}`.toLowerCase();
-    return name.includes(search.toLowerCase());
+    if (statusFilter.length && !statusFilter.includes(tm.status)) return false;
+    if (locationFilter.length && !(locationFilter.includes(tm.homeLocationId) ||
+      (tm.assignedLocationIds || []).some(l => locationFilter.includes(l)))) return false;
+    if (roleFilter.length && !(tm.assignedRoleIds || []).some(r => roleFilter.includes(r))) return false;
+    const hay = `${tm.firstName} ${tm.lastName} ${tm.preferredName || ''} ${tm.email || ''} ${tm.tmNumber || ''}`.toLowerCase();
+    return hay.includes(search.toLowerCase());
   });
+
+  const sorted = React.useMemo(() => {
+    const val = (tm) => sortBy === 'status' ? (statusLabels[tm.status] || tm.status)
+      : sortBy === 'location' ? getLocationName(tm.homeLocationId)
+      : `${tm.preferredName || tm.firstName} ${tm.lastName}`;
+    const arr = [...filtered].sort((a, b) => String(val(a)).localeCompare(String(val(b)), undefined, { sensitivity: 'base' }));
+    return sortDir === 'asc' ? arr : arr.reverse();
+  }, [filtered, sortBy, sortDir]); // eslint-disable-line
+
+  const activeFilterCount = (statusFilter.length !== 2 || !statusFilter.includes('active') || !statusFilter.includes('inactive') ? 1 : 0)
+    + (locationFilter.length ? 1 : 0) + (roleFilter.length ? 1 : 0);
 
   const restoreMutation = useMutation({
     mutationFn: (id) => base44.entities.TeamMember.update(id, { status: 'active' }),
@@ -304,27 +356,93 @@ export default function TeamMembers() {
         )}
       </PageHeader>
 
-      <div className="flex items-center gap-3 mb-4">
-        <div className="relative flex-1 max-w-sm">
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <div className="relative flex-1 min-w-[180px] max-w-sm">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search team members..."
+            placeholder="Search name, email, or badge #..."
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="pl-9"
           />
         </div>
-        {isAdmin && (
-          <Button
-            size="sm"
-            variant={showArchived ? 'secondary' : 'outline'}
-            className="gap-1.5 shrink-0"
-            onClick={() => setShowArchived(v => !v)}
-          >
-            <Archive className="w-4 h-4" />
-            {showArchived ? `Hide Archived (${archivedMembers.length})` : 'Show Archived'}
-          </Button>
+
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button size="sm" variant="outline" className="gap-1.5 shrink-0">
+              <Filter className="w-4 h-4" /> Filter
+              {activeFilterCount > 0 && (
+                <span className="text-[10px] bg-primary text-primary-foreground rounded-full px-1.5 leading-tight">{activeFilterCount}</span>
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-64 p-0">
+            <div className="max-h-[60vh] overflow-y-auto p-3 space-y-3">
+              <FilterGroup
+                title="Status"
+                options={isAdmin
+                  ? [{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Suspended' }, { value: 'archived', label: 'Termed' }]
+                  : [{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Suspended' }]}
+                selected={statusFilter}
+                onToggle={toggleIn(setStatusFilter)}
+              />
+              <FilterGroup
+                title="Location"
+                options={(locations || []).map(l => ({ value: l.id, label: l.name }))}
+                selected={locationFilter}
+                onToggle={toggleIn(setLocationFilter)}
+              />
+              <FilterGroup
+                title="Role"
+                options={(roles || []).filter(r => r.status === 'active').map(r => ({ value: r.id, label: r.name }))}
+                selected={roleFilter}
+                onToggle={toggleIn(setRoleFilter)}
+              />
+            </div>
+            {activeFilterCount > 0 && (
+              <div className="border-t border-border p-2">
+                <Button variant="ghost" size="sm" className="w-full gap-1.5 text-xs"
+                  onClick={() => { setStatusFilter(['active', 'inactive']); setLocationFilter([]); setRoleFilter([]); }}>
+                  <X className="w-3.5 h-3.5" /> Clear filters
+                </Button>
+              </div>
+            )}
+          </PopoverContent>
+        </Popover>
+
+        {viewMode === 'list' && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button size="sm" variant="outline" className="gap-1.5 shrink-0">
+                <ArrowUpDown className="w-4 h-4" /> Sort
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-44 p-1">
+              {[['name', 'Name'], ['status', 'Status'], ['location', 'Location']].map(([v, l]) => (
+                <button key={v} type="button" onClick={() => setSortBy(v)}
+                  className={cn('w-full flex items-center justify-between px-2 py-1.5 text-sm rounded hover:bg-muted', sortBy === v && 'text-primary font-medium')}>
+                  {l} {sortBy === v && <Check className="w-3.5 h-3.5" />}
+                </button>
+              ))}
+              <div className="border-t border-border my-1" />
+              <button type="button" onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
+                className="w-full text-left px-2 py-1.5 text-sm rounded hover:bg-muted">
+                {sortDir === 'asc' ? 'Ascending ↑' : 'Descending ↓'}
+              </button>
+            </PopoverContent>
+          </Popover>
         )}
+
+        <div className="flex items-center rounded-md border border-input shrink-0 overflow-hidden">
+          <button type="button" onClick={() => setViewMode('card')} title="Card view"
+            className={cn('p-1.5', viewMode === 'card' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+            <LayoutGrid className="w-4 h-4" />
+          </button>
+          <button type="button" onClick={() => setViewMode('list')} title="List view"
+            className={cn('p-1.5 border-l border-input', viewMode === 'list' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+            <ListIcon className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {loadingMembers && (
@@ -346,8 +464,8 @@ export default function TeamMembers() {
         </div>
       )}
 
-      <div className={loadingMembers ? 'hidden' : 'grid sm:grid-cols-2 lg:grid-cols-3 gap-3'}>
-        {filtered.map(tm => (
+      <div className={loadingMembers || viewMode !== 'card' ? 'hidden' : 'grid sm:grid-cols-2 lg:grid-cols-3 gap-3'}>
+        {sorted.map(tm => (
           <Card
             key={tm.id}
             className={cn(
@@ -451,6 +569,52 @@ export default function TeamMembers() {
           </Card>
         ))}
       </div>
+
+      {!loadingMembers && viewMode === 'list' && sorted.length > 0 && (
+        <div className="rounded-lg border border-border overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/40 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                <th className="px-3 py-2 font-semibold cursor-pointer select-none" onClick={() => setSortBy('name')}>Name</th>
+                <th className="px-3 py-2 font-semibold cursor-pointer select-none" onClick={() => setSortBy('status')}>Status</th>
+                <th className="px-3 py-2 font-semibold cursor-pointer select-none hidden sm:table-cell" onClick={() => setSortBy('location')}>Location</th>
+                <th className="px-3 py-2 font-semibold hidden md:table-cell">Roles</th>
+                <th className="px-3 py-2 font-semibold hidden lg:table-cell">Email</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map(tm => (
+                <tr key={tm.id}
+                  onClick={(e) => bulkSelectMode ? toggleSelect(tm.id, e.shiftKey) : openEdit(tm.id)}
+                  className={cn('border-b border-border last:border-0 hover:bg-muted/40 cursor-pointer',
+                    bulkSelectMode && selectedIds.has(tm.id) && 'bg-destructive/10')}>
+                  <td className="px-3 py-2">
+                    <span className="font-medium">{tm.preferredName || tm.firstName} {tm.lastName}</span>
+                    {tm.status === 'active' && !tm.userId && (
+                      <Badge className={cn('ml-2 text-[9px] border-0', invitedPill)}>Invited</Badge>
+                    )}
+                  </td>
+                  <td className="px-3 py-2">
+                    <Badge className={cn('text-[10px] border-0', statusColors[tm.status])}>{statusLabels[tm.status] || tm.status}</Badge>
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground hidden sm:table-cell">{getLocationName(tm.homeLocationId)}</td>
+                  <td className="px-3 py-2 hidden md:table-cell">
+                    <div className="flex flex-wrap gap-1">
+                      {(tm.assignedRoleIds || []).slice(0, 3).map(rid => (
+                        <Badge key={rid} variant="outline" className="text-[9px] px-1.5 py-0" style={{ borderColor: getRoleColor(rid), color: getRoleColor(rid) }}>{getRoleName(rid)}</Badge>
+                      ))}
+                      {(tm.assignedRoleIds || []).length > 3 && (
+                        <span className="text-[10px] text-muted-foreground">+{tm.assignedRoleIds.length - 3}</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground hidden lg:table-cell truncate max-w-[220px]">{tm.email}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
         <DialogContent>
