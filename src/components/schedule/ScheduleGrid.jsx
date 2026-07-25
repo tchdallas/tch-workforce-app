@@ -3,7 +3,7 @@ import { format, addDays, isSameDay } from 'date-fns';
 import { cn, businessDayOf } from '@/lib/utils';
 import { Plus, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
 import ShiftCard from './ShiftCard';
-import { roleDayCoverage } from '@/lib/parCoverage';
+import { roleDayCoverage, dayParSummary } from '@/lib/parCoverage';
 
 export default function ScheduleGrid({
   weekStart, shifts, roles, teamMembers, locations, viewMode,
@@ -426,11 +426,7 @@ export default function ScheduleGrid({
           const dayPar = days.map(day => {
             const cov = parWindows.length
               ? roleDayCoverage(parWindows, shifts, role.id, day, dayStartHour, selectedLocation) : [];
-            return {
-              short: cov.filter(c => c.status === 'short').length,
-              over: cov.filter(c => c.status === 'over').length,
-              hasPar: cov.length > 0,
-            };
+            return dayParSummary(cov);
           });
           return (
             <div key={role.id}>
@@ -448,8 +444,8 @@ export default function ScheduleGrid({
                 </div>
                 {dayPar.map((dp, di) => (
                   <div key={di} className="flex items-center justify-center p-1 border-l border-border/30">
-                    {dp.short > 0 ? <span className="text-[9px] leading-none px-1 py-0.5 rounded font-semibold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300" title="par windows understaffed">{dp.short} under</span>
-                      : dp.over > 0 ? <span className="text-[9px] leading-none px-1 py-0.5 rounded font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" title="par windows overstaffed">{dp.over} over</span>
+                    {dp.short > 0 ? <span className="text-[9px] leading-none px-1 py-0.5 rounded font-semibold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300" title={`${dp.short} shift${dp.short === 1 ? '' : 's'} short · ${dp.shortWins} start time${dp.shortWins === 1 ? '' : 's'} below par`}>{dp.short} under</span>
+                      : dp.over > 0 ? <span className="text-[9px] leading-none px-1 py-0.5 rounded font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" title={`${dp.over} shift${dp.over === 1 ? '' : 's'} over · ${dp.overWins} start time${dp.overWins === 1 ? '' : 's'} above par`}>{dp.over} over</span>
                         : dp.hasPar ? <span className="text-[10px] text-emerald-600/60 dark:text-emerald-400/60" title="par met">✓</span> : null}
                   </div>
                 ))}
@@ -529,9 +525,9 @@ export default function ScheduleGrid({
                   {dayPar.map((dp, di) => (
                     <div key={di} className="flex items-center justify-center p-1 border-l border-border/30">
                       {dp.short > 0 ? (
-                        <span className="text-[9px] leading-none px-1 py-0.5 rounded font-semibold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300" title={`${dp.short} par window(s) understaffed`}>{dp.short} under</span>
+                        <span className="text-[9px] leading-none px-1 py-0.5 rounded font-semibold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300" title={`${dp.short} shift${dp.short === 1 ? '' : 's'} short · ${dp.shortWins} start time${dp.shortWins === 1 ? '' : 's'} below par`}>{dp.short} under</span>
                       ) : dp.over > 0 ? (
-                        <span className="text-[9px] leading-none px-1 py-0.5 rounded font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" title={`${dp.over} par window(s) overstaffed`}>{dp.over} over</span>
+                        <span className="text-[9px] leading-none px-1 py-0.5 rounded font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" title={`${dp.over} shift${dp.over === 1 ? '' : 's'} over · ${dp.overWins} start time${dp.overWins === 1 ? '' : 's'} above par`}>{dp.over} over</span>
                       ) : dp.hasPar ? (
                         <span className="text-[10px] text-emerald-600/60 dark:text-emerald-400/60" title="Par met">✓</span>
                       ) : null}

@@ -4,48 +4,63 @@
 import {
   LayoutDashboard, Radio, Calendar, CalendarCheck, LayoutTemplate, HandHelping,
   ClipboardList, AlertTriangle, Clock, Trophy, Users, UserCheck, MessageSquare,
-  Megaphone, BarChart3, Activity, MapPin, Shield, Target, Settings, Bell, User, Bug,
+  Megaphone, BarChart3, Activity, MapPin, Shield, Target, Settings, Bell, User, Bug, MessageSquarePlus,
 } from 'lucide-react';
 
+// Each group carries an accent color so sections are scannable at a glance
+// (a dot on the header + a left rail on its items).
 export const navGroups = [
-  { label: 'Overview', items: [
+  { label: 'Overview', color: '#d2ad74', items: [
     { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
     { label: 'Live Roadmap', icon: Radio, path: '/roadmap' },
   ] },
-  { label: 'Scheduling', items: [
+  { label: 'Scheduling', color: '#3b82f6', items: [
     { label: 'Schedule', icon: Calendar, path: '/schedule' },
     { label: 'My Schedule', icon: CalendarCheck, path: '/my-schedule' },
     { label: 'Templates', icon: LayoutTemplate, path: '/schedule-templates', managerOnly: true },
+    { label: 'Par Levels', icon: Target, path: '/par-levels', adminOnly: true },
     { label: 'Open Shifts', icon: HandHelping, path: '/open-shifts' },
   ] },
-  { label: 'Requests', items: [
+  { label: 'Requests', color: '#f59e0b', items: [
     { label: 'Requests', icon: ClipboardList, path: '/requests', managerOnly: true },
     { label: 'Callouts', icon: AlertTriangle, path: '/callouts', managerOnly: true },
   ] },
-  { label: 'Time & Pay', items: [
+  { label: 'Time & Pay', color: '#10b981', items: [
     { label: 'Timesheets', icon: Clock, path: '/timesheets', managerOnly: true },
     { label: 'Downs', icon: Trophy, path: '/downs', managerOnly: true },
   ] },
-  { label: 'Team', items: [
+  { label: 'Team', color: '#8b5cf6', items: [
     { label: 'Team Members', icon: Users, path: '/team-members', managerOnly: true },
     { label: 'Attendance', icon: UserCheck, path: '/attendance', managerOnly: true },
   ] },
-  { label: 'Communication', items: [
+  { label: 'Communication', color: '#0ea5e9', items: [
     { label: 'Messages', icon: MessageSquare, path: '/messages' },
     { label: 'Announcements', icon: Megaphone, path: '/announcements' },
   ] },
-  { label: 'Insights', items: [
+  { label: 'Insights', color: '#f43f5e', items: [
     { label: 'Reports', icon: BarChart3, path: '/reports', managerOnly: true },
     { label: 'Audit Log', icon: Activity, path: '/audit-log', managerOnly: true },
-    { label: 'Bug Reports', icon: Bug, path: '/bug-reports', managerOnly: true },
+    { label: 'Feedback', icon: MessageSquarePlus, path: '/bug-reports', managerOnly: true },
   ] },
-  { label: 'Setup', items: [
+  { label: 'Setup', color: '#64748b', items: [
     { label: 'Locations', icon: MapPin, path: '/locations', managerOnly: true },
     { label: 'Roles', icon: Shield, path: '/roles', managerOnly: true },
-    { label: 'Par Levels', icon: Target, path: '/par-levels', adminOnly: true },
     { label: 'Settings', icon: Settings, path: '/settings', adminOnly: true },
   ] },
 ];
+
+export const FAVORITE_COLOR = '#eab308'; // gold star accent for the Favorites section
+
+// Resolve any nav path to its item definition + its group's accent color.
+export function findNavItem(path) {
+  for (const g of navGroups) {
+    const it = g.items.find((i) => i.path === path);
+    if (it) return { item: it, color: g.color };
+  }
+  const f = footerNavItems.find((i) => i.path === path);
+  if (f) return { item: f, color: FAVORITE_COLOR };
+  return null;
+}
 
 // Personal items — pinned at the very bottom, outside the collapsible groups.
 export const footerNavItems = [
@@ -103,5 +118,25 @@ export function saveOpenGroups(state) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch {
     // ignore quota/availability errors — collapse state is non-critical
+  }
+}
+
+// Favorites — per member, an ordered list of pinned nav paths.
+const favKey = (memberId) => `tch-nav-favorites-${memberId || 'anon'}`;
+
+export function loadFavorites(memberId) {
+  try {
+    const v = JSON.parse(localStorage.getItem(favKey(memberId)) || '[]');
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveFavorites(memberId, list) {
+  try {
+    localStorage.setItem(favKey(memberId), JSON.stringify(list));
+  } catch {
+    // ignore — favorites are a convenience, non-critical
   }
 }

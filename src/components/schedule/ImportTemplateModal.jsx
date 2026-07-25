@@ -85,6 +85,12 @@ export default function ImportTemplateModal({ open, onClose, weekStart, selected
       toast.success(`${shiftsToCreate.length} open shift${shiftsToCreate.length !== 1 ? 's' : ''} created from template`);
       setTemplateId('');
       onImported();
+    } catch (err) {
+      // never fail silently — the old code let this reject unhandled ("nothing happens")
+      const msg = /row-level security|has_location_access/i.test(err?.message || '')
+        ? "You don't have access to the schedule's selected location. Switch to one of your locations and try again."
+        : (err?.message || 'Could not import the template.');
+      toast.error(msg);
     } finally {
       setImporting(false);
     }

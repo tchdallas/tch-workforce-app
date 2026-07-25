@@ -10,6 +10,7 @@ import AvailabilityForm from '@/components/profile/AvailabilityForm';
 import MemberFileTab from '@/components/discipline/MemberFileTab';
 import { Switch } from '@/components/ui/switch';
 import { TERMINATION_CATEGORIES, TERMINATION_REASONS } from '@/lib/termination';
+import { useCurrentMember } from '@/hooks/useCurrentMember';
 
 const defaultMember = {
   tmNumber: '', firstName: '', lastName: '', preferredName: '', email: '', phone: '',
@@ -23,6 +24,15 @@ export default function TeamMemberModal({ open, onClose, member, locations, role
   const [form, setForm] = useState(defaultMember);
   const [tmNumberError, setTmNumberError] = useState('');
   const isEdit = !!member?.id;
+  const { scopeLocations, outranks } = useCurrentMember();
+
+  // Locations this admin may assign, PLUS any this member already holds — so a
+  // location_admin editing someone with an out-of-scope location still sees it
+  // and can't silently strip it, while new picks stay within their scope.
+  const activeLocations = locations.filter(l => l.status === 'active');
+  const scopedLocationIds = new Set(scopeLocations(activeLocations).map(l => l.id));
+  const memberLocationIds = new Set([form.homeLocationId, ...(form.assignedLocationIds || [])].filter(Boolean));
+  const selectableLocations = activeLocations.filter(l => scopedLocationIds.has(l.id) || memberLocationIds.has(l.id));
 
   useEffect(() => {
     if (member) setForm({ ...defaultMember, ...member });
@@ -205,7 +215,7 @@ export default function TeamMemberModal({ open, onClose, member, locations, role
                   className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
                 >
                   <option value="">No home location</option>
-                  {locations.filter(l => l.status === 'active').map(l => (
+                  {selectableLocations.map(l => (
                     <option key={l.id} value={l.id}>{l.name}</option>
                   ))}
                 </select>
@@ -214,7 +224,7 @@ export default function TeamMemberModal({ open, onClose, member, locations, role
               <div>
                 <Label className="text-xs mb-2 block">Additional Locations</Label>
                 <div className="space-y-1.5">
-                  {locations.filter(l => l.status === 'active').map(l => (
+                  {selectableLocations.map(l => (
                     <label key={l.id} className="flex items-center gap-2 p-2 rounded-lg hover:bg-muted/50 cursor-pointer">
                       <input
                         type="checkbox"
@@ -225,7 +235,7 @@ export default function TeamMemberModal({ open, onClose, member, locations, role
                       <span className="text-sm">{l.name}</span>
                     </label>
                   ))}
-                  {locations.filter(l => l.status === 'active').length === 0 && (
+                  {selectableLocations.length === 0 && (
                     <p className="text-xs text-muted-foreground">No locations available.</p>
                   )}
                 </div>
@@ -362,6 +372,7 @@ export default function TeamMemberModal({ open, onClose, member, locations, role
                 <MemberFileTab
                   memberId={member.id}
                   memberName={form.preferredName ? `${form.preferredName} ${form.lastName}` : `${form.firstName} ${form.lastName}`}
+                  canManage={outranks(member.permissionLevel)}
                 />
               </TabsContent>
             )}

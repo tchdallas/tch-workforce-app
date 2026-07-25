@@ -34,7 +34,7 @@ const CORP = new Set(['super_admin', 'corporate_admin']);
 
 export default function Announcements() {
   const qc = useQueryClient();
-  const { member, isManager } = useCurrentMember();
+  const { member, isManager, scopeLocations } = useCurrentMember();
   const myId = member?.id;
   const isCorp = CORP.has(member?.permissionLevel);
 
@@ -234,7 +234,7 @@ function ComposeDialog({ open, onClose, isCorp, onPosted }) {
               <Label className="text-xs">Location</Label>
               <Select value={locationId} onValueChange={setLocationId}>
                 <SelectTrigger><SelectValue placeholder="Choose location" /></SelectTrigger>
-                <SelectContent>{locations.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}</SelectContent>
+                <SelectContent>{scopeLocations(locations.filter(l => l.status === 'active')).map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
           )}

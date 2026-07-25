@@ -10,15 +10,47 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Bug, Loader2, ChevronDown, Check, ImageOff } from 'lucide-react';
+import { Bug, Loader2, ChevronDown, Check, ImageOff, Lightbulb, MessageSquarePlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
-const SEVERITIES = [
-  { v: 'low', label: 'Minor', hint: 'Cosmetic or small annoyance' },
-  { v: 'medium', label: 'Normal', hint: 'Something works wrong' },
-  { v: 'high', label: 'Blocking', hint: "Can't do the task" },
+const KINDS = [
+  { v: 'bug', label: 'Bug', hint: 'Something is broken', icon: Bug },
+  { v: 'feature', label: 'Feature request', hint: 'An idea or improvement', icon: Lightbulb },
 ];
+
+// Same stored values (low/medium/high) — just framed for the chosen kind.
+const IMPACT = {
+  bug: [
+    { v: 'low', label: 'Minor', hint: 'Cosmetic or small annoyance' },
+    { v: 'medium', label: 'Normal', hint: 'Something works wrong' },
+    { v: 'high', label: 'Blocking', hint: "Can't do the task" },
+  ],
+  feature: [
+    { v: 'low', label: 'Nice to have', hint: 'A small plus' },
+    { v: 'medium', label: 'Would help', hint: 'Makes work easier' },
+    { v: 'high', label: 'Really need it', hint: 'Important for the team' },
+  ],
+};
+
+const COPY = {
+  bug: {
+    title: 'Report a bug', icon: Bug,
+    q1: 'What went wrong?', q1ph: 'Describe the problem in your own words.',
+    q2: 'What were you doing?', q2ph: 'The steps you took right before it happened.',
+    q3: 'What did you expect to happen?',
+    impact: 'How bad is it?', submit: 'Send report',
+    success: 'Thanks — your bug report was sent to the team.',
+  },
+  feature: {
+    title: 'Request a feature', icon: Lightbulb,
+    q1: 'What would you like added or changed?', q1ph: 'Describe your idea in your own words.',
+    q2: 'Why would it help?', q2ph: 'The problem it solves or the time it saves.',
+    q3: 'How do you picture it working?',
+    impact: 'How important is it?', submit: 'Send request',
+    success: 'Thanks — your feature request was sent to the team.',
+  },
+};
 
 const bundleVersion = () =>
   document.querySelector('script[src*="assets/index-"]')?.getAttribute('src') || 'dev';
@@ -44,7 +76,7 @@ async function captureViewport() {
   }
 }
 
-const empty = { description: '', steps: '', expected: '', severity: 'medium' };
+const empty = { kind: 'bug', description: '', steps: '', expected: '', severity: 'medium' };
 
 export default function BugReporter() {
   const location = useLocation();
@@ -101,6 +133,7 @@ export default function BugReporter() {
       }
       await base44.entities.BugReport.create({
         reporterId: member?.id || null,
+        kind: form.kind,
         route: location.pathname,
         description: form.description.trim(),
         steps: form.steps.trim() || null,
@@ -114,18 +147,22 @@ export default function BugReporter() {
       });
     },
     onSuccess: () => {
-      toast.success('Thanks — your report was sent to the team.');
+      toast.success(COPY[form.kind].success);
       close();
     },
-    onError: (e) => toast.error(e?.message || 'Could not send the report — try again.'),
+    onError: (e) => toast.error(e?.message || 'Could not send — try again.'),
   });
 
   const handleSubmit = () => {
-    if (!form.description.trim()) return toast.error('Please describe what went wrong.');
+    if (!form.description.trim()) {
+      return toast.error(form.kind === 'feature' ? 'Please describe your idea.' : 'Please describe what went wrong.');
+    }
     submit.mutate();
   };
 
   const errCount = getRecentErrors().filter((e) => e.level === 'error').length;
+  const copy = COPY[form.kind];
+  const impact = IMPACT[form.kind];
 
   return (
     <>
@@ -133,8 +170,8 @@ export default function BugReporter() {
         type="button"
         data-bug-ignore="true"
         onClick={openReporter}
-        title="Report a bug"
-        aria-label="Report a bug"
+        title="Send feedback — report a bug or request a feature"
+        aria-label="Send feedback"
         className={cn(
           `fixed right-4 bottom-20 lg:bottom-6 z-40 flex items-center gap-2 h-11 pl-3 pr-4 rounded-full
           bg-foreground text-background shadow-lg border border-border/40
@@ -142,39 +179,60 @@ export default function BugReporter() {
           inputFocused && 'hidden'
         )}
       >
-        <Bug className="w-4 h-4" />
-        <span className="hidden sm:inline">Report a bug</span>
+        <MessageSquarePlus className="w-4 h-4" />
+        <span className="hidden sm:inline">Feedback</span>
       </button>
 
       <Dialog open={open} onOpenChange={(o) => (o ? null : close())}>
         <DialogContent className="max-w-lg" data-bug-ignore="true">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Bug className="w-4 h-4" /> Report a bug</DialogTitle>
+            <DialogTitle className="flex items-center gap-2"><copy.icon className="w-4 h-4" /> {copy.title}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-3 max-h-[65vh] overflow-y-auto pr-1">
+            {/* Bug vs feature request */}
+            <div className="grid grid-cols-2 gap-2">
+              {KINDS.map((k) => (
+                <button
+                  key={k.v}
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, kind: k.v }))}
+                  className={cn(
+                    'flex items-center gap-2 rounded-md border px-3 py-2 text-left transition-colors',
+                    form.kind === k.v ? 'border-primary bg-primary/10' : 'border-input hover:bg-accent/10'
+                  )}
+                >
+                  <k.icon className="w-4 h-4 shrink-0" />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium">{k.label}</span>
+                    <span className="block text-[10px] text-muted-foreground leading-tight">{k.hint}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+
             <div>
-              <Label className="text-xs">What went wrong? <span className="text-destructive">*</span></Label>
+              <Label className="text-xs">{copy.q1} <span className="text-destructive">*</span></Label>
               <Textarea
                 value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                placeholder="Describe the problem in your own words."
+                placeholder={copy.q1ph}
                 className="mt-1"
                 rows={2}
               />
             </div>
             <div>
-              <Label className="text-xs">What were you doing?</Label>
+              <Label className="text-xs">{copy.q2}</Label>
               <Textarea
                 value={form.steps}
                 onChange={(e) => setForm((f) => ({ ...f, steps: e.target.value }))}
-                placeholder="The steps you took right before it happened."
+                placeholder={copy.q2ph}
                 className="mt-1"
                 rows={2}
               />
             </div>
             <div>
-              <Label className="text-xs">What did you expect to happen?</Label>
+              <Label className="text-xs">{copy.q3}</Label>
               <Input
                 value={form.expected}
                 onChange={(e) => setForm((f) => ({ ...f, expected: e.target.value }))}
@@ -184,9 +242,9 @@ export default function BugReporter() {
             </div>
 
             <div>
-              <Label className="text-xs">How bad is it?</Label>
+              <Label className="text-xs">{copy.impact}</Label>
               <div className="grid grid-cols-3 gap-2 mt-1">
-                {SEVERITIES.map((s) => (
+                {impact.map((s) => (
                   <button
                     key={s.v}
                     type="button"
@@ -260,7 +318,7 @@ export default function BugReporter() {
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={close}>Cancel</Button>
             <Button size="sm" onClick={handleSubmit} disabled={submit.isPending}>
-              {submit.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Check className="w-4 h-4 mr-1" /> Send report</>}
+              {submit.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Check className="w-4 h-4 mr-1" /> {copy.submit}</>}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -15,6 +15,9 @@ export default function ChangePasswordCard() {
   const [saving, setSaving] = useState(false);
 
   const valid = password.length >= 8 && password === confirm;
+  // Live hints so a disabled button never looks broken — tell them what's wrong
+  const tooShort = password.length > 0 && password.length < 8;
+  const mismatch = confirm.length > 0 && password !== confirm;
 
   const save = async () => {
     if (password.length < 8) return toast.error('Use at least 8 characters');
@@ -50,9 +53,25 @@ export default function ChangePasswordCard() {
           </div>
           <div>
             <Label className="text-xs">Confirm password</Label>
-            <Input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="Re-enter password" />
+            <Input
+              type="password"
+              value={confirm}
+              onChange={e => setConfirm(e.target.value)}
+              placeholder="Re-enter password"
+              className={mismatch ? 'border-destructive focus-visible:ring-destructive' : undefined}
+            />
           </div>
         </div>
+
+        {/* Explain why the button is disabled instead of leaving it silently grayed out */}
+        {mismatch ? (
+          <p className="text-xs text-destructive">Passwords don't match.</p>
+        ) : tooShort ? (
+          <p className="text-xs text-destructive">Password must be at least 8 characters.</p>
+        ) : valid ? (
+          <p className="text-xs text-emerald-600 dark:text-emerald-400">Passwords match.</p>
+        ) : null}
+
         <Button size="sm" disabled={!valid || saving} onClick={save} className="gap-1.5">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />} Update password
         </Button>

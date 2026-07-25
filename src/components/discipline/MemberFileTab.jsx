@@ -17,7 +17,7 @@ import { entryTypeShort, DOC_STATUS, SENTIMENTS, sentimentMeta } from './discipl
 
 // The "File" tab on a team member's profile (manager view):
 // journal entries (notes to file) + progressive discipline documents.
-export default function MemberFileTab({ memberId, memberName }) {
+export default function MemberFileTab({ memberId, memberName, canManage = true }) {
   const queryClient = useQueryClient();
   const { member: me, isAdmin } = useCurrentMember();
   const { data: teamMembers = [] } = useTeamMembers();
@@ -84,9 +84,11 @@ export default function MemberFileTab({ memberId, memberName }) {
           <h3 className="text-sm font-semibold flex items-center gap-1.5">
             <FileText className="w-4 h-4" /> Performance Documentation
           </h3>
-          <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => setFormDoc(null)}>
-            <Plus className="w-3.5 h-3.5" /> New Document
-          </Button>
+          {canManage && (
+            <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => setFormDoc(null)}>
+              <Plus className="w-3.5 h-3.5" /> New Document
+            </Button>
+          )}
         </div>
         <div className="space-y-1.5">
           {sortedDocs.length === 0 && (
@@ -123,7 +125,7 @@ export default function MemberFileTab({ memberId, memberName }) {
           <h3 className="text-sm font-semibold flex items-center gap-1.5">
             <NotebookPen className="w-4 h-4" /> Notes to File
           </h3>
-          {!adding && (
+          {canManage && !adding && (
             <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => setAdding(true)}>
               <Plus className="w-3.5 h-3.5" /> Add Note
             </Button>

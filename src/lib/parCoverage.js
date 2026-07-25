@@ -1,10 +1,14 @@
 // Coverage of a built schedule against a staffing plan's par windows.
 //
-// Par windows use gaming-day clock times (e.g. 18:00–02:00). `date` is the
-// gaming day's starting calendar date; `dayStartHour` is the business-day
-// boundary (default 4 AM). We map each window to a real datetime range on that
-// gaming day, then measure the *minimum concurrent* headcount across it — the
-// worst-covered moment is what determines whether par is actually met.
+// Par is a "required shift STARTS per time slot" model: a par of 6 at 1:00 PM
+// means six shifts should *begin* at 1:00 PM (a wave of six dealers clocking in),
+// NOT six people present at some moment. So each par number is an independent
+// demand for that start time, and a day's total demand is the SUM of its numbers
+// (e.g. 1+6+3+1+1+1+1 = 14 shifts). A shift counts toward exactly one slot — the
+// window its start time falls in.
+//
+// Par windows use gaming-day clock times (e.g. 18:00–02:00). `date` is the gaming
+// day's starting calendar date; `dayStartHour` is the business-day boundary (4 AM).
 
 const toMin = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + (m || 0); };
 const gdMin = (t, sh) => ((toMin(t) - sh * 60) + 1440) % 1440;
@@ -17,28 +21,9 @@ function windowRange(win, date, dayStartHour) {
   return [new Date(base.getTime() + s * 60000), new Date(base.getTime() + e * 60000)];
 }
 
-// min & max people concurrently scheduled during [start, end)
-function concurrency(shifts, start, end) {
-  const S = start.getTime(), E = end.getTime();
-  const points = new Set([S]);
-  shifts.forEach(sh => {
-    const a = ms(sh.startDateTime), b = ms(sh.endDateTime);
-    if (a > S && a < E) points.add(a);
-    if (b > S && b < E) points.add(b);
-  });
-  let min = Infinity, max = 0;
-  points.forEach(t => {
-    let c = 0;
-    shifts.forEach(sh => { if (ms(sh.startDateTime) <= t && ms(sh.endDateTime) > t) c++; });
-    if (c < min) min = c;
-    if (c > max) max = c;
-  });
-  return { min: min === Infinity ? 0 : min, max };
-}
-
 // Coverage for one role's par windows on a gaming-day date.
-// Returns [{ win, start, end, min, max, required, status }] sorted by start.
-// status: 'short' (understaffed at some point) | 'over' (extra at some point) | 'met'.
+// Returns [{ win, start, end, scheduled, min, max, required, status }] by start.
+// `scheduled` = shifts whose START falls in the slot. status: 'short' | 'over' | 'met'.
 export function roleDayCoverage(parWindows, shifts, roleId, date, dayStartHour, locationId) {
   const dow = date.getDay();
   const wins = parWindows.filter(w => w.roleId === roleId && w.dayOfWeek === dow);
@@ -47,12 +32,29 @@ export function roleDayCoverage(parWindows, shifts, roleId, date, dayStartHour, 
     s.roleId === roleId && s.status !== 'cancelled' && (!locationId || s.locationId === locationId));
   return wins.map(win => {
     const [start, end] = windowRange(win, date, dayStartHour);
-    const inWin = roleShifts.filter(s => ms(s.startDateTime) < end.getTime() && ms(s.endDateTime) > start.getTime());
-    const { min, max } = concurrency(inWin, start, end);
+    // par = required shift starts: count shifts that BEGIN within this slot
+    const scheduled = roleShifts.filter(s => {
+      const t = ms(s.startDateTime);
+      return t >= start.getTime() && t < end.getTime();
+    }).length;
     const required = win.requiredCount;
-    const status = min < required ? 'short' : max > required ? 'over' : 'met';
-    return { win, start, end, min, max, required, status };
+    const status = scheduled < required ? 'short' : scheduled > required ? 'over' : 'met';
+    return { win, start, end, scheduled, min: scheduled, max: scheduled, required, status };
   }).sort((a, b) => a.start - b.start);
+}
+
+// Roll a day's per-window coverage into one badge number. Because par counts
+// shift STARTS, the day's gap is the SUM of the per-slot shortfalls — the number
+// of shifts still missing (e.g. slots of 1,6,3,1,1,1,1 with nothing scheduled →
+// 14 short). `shortWins`/`overWins` keep the count of slots for the tooltip.
+export function dayParSummary(cov) {
+  let short = 0, over = 0, shortWins = 0, overWins = 0;
+  for (const c of cov) {
+    const gap = c.required - c.scheduled;
+    if (gap > 0) { short += gap; shortWins++; }
+    else if (gap < 0) { over += -gap; overWins++; }
+  }
+  return { short, over, shortWins, overWins, hasPar: cov.length > 0 };
 }
 
 // Roles (ids) that have any par window on this gaming day for the given plan.

@@ -90,6 +90,115 @@ function parseCSV(text) {
   return { headers, rows };
 }
 
+// ── Paylocity "Employee Personal Contact List" export ─────────────────────────
+// This report has ONE ROW PER (employee × location): a person assigned to two
+// rooms shows up on two lines. We detect that shape and consolidate every line
+// for the same Employee Id into a single team member, collecting each line's
+// "Location Description" into that member's assigned locations. "Employee Id" is
+// the app's Team Member ID (tmNumber).
+const PAYLOCITY_SIGNATURE = ['employeeid', 'locationdescription', 'personalemail'];
+const normKey = (h) => h.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+// split one CSV line, honoring quoted fields (quotes are stripped)
+function splitCSVLine(line) {
+  const values = [];
+  let current = '';
+  let inQuotes = false;
+  for (const char of line) {
+    if (char === '"') { inQuotes = !inQuotes; }
+    else if (char === ',' && !inQuotes) { values.push(current.trim()); current = ''; }
+    else { current += char; }
+  }
+  values.push(current.trim());
+  return values;
+}
+
+function isPaylocityContactList(text) {
+  const first = text.replace(/\r/g, '').split('\n').find(l => l.trim() && !l.startsWith('#'));
+  if (!first) return false;
+  const keys = splitCSVLine(first).map(normKey);
+  return PAYLOCITY_SIGNATURE.every(s => keys.includes(s));
+}
+
+// Paylocity exports phones as '+17204909257 / 5125730089 / (blank). Reduce to a
+// clean US format; keep raw digits if it isn't a standard 10-digit number.
+function sanitizePhone(raw) {
+  let d = (raw || '').replace(/\D/g, '');
+  if (d.length === 11 && d.startsWith('1')) d = d.slice(1);
+  if (d.length === 10) return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
+  return d || '';
+}
+
+// Best-guess bucket for an auto-created role, from its title. Groups match the
+// Roles page (Floor · Cage · Kitchen · Bar · Management · Other); anything
+// unclear lands in Other for a human to recategorize.
+function inferRoleGroup(title) {
+  const t = (title || '').toLowerCase();
+  if (/cage|cashier/.test(t)) return 'Cage';
+  if (/cook|chef|dishwash|kitchen|food runner|sous/.test(t)) return 'Kitchen';
+  if (/bartender|barback|\bbar\b/.test(t)) return 'Bar';
+  if (/manager|director|chief|officer|\bvp\b|president|supervis|\blead\b|head of|chief of staff|scheduler|accountant|bookkeeper|producer|analyst|engineer|designer|tracker|commentator/.test(t)) return 'Management';
+  if (/dealer|brush|floor|host|server|shuttle|attendant/.test(t)) return 'Floor';
+  return 'Other';
+}
+
+// Short code for an auto-created location (Hijack → HIJ)
+function deriveAbbrev(name) {
+  const letters = (name || '').replace(/[^a-zA-Z]/g, '');
+  return letters.slice(0, 3).toUpperCase();
+}
+
+function parsePaylocityContactList(text) {
+  const lines = text.replace(/\r/g, '').split('\n').filter(l => l.trim());
+  const rawHeaders = splitCSVLine(lines[0]);
+  const idx = {};
+  rawHeaders.forEach((h, i) => { idx[normKey(h)] = i; });
+  const col = (vals, key) => (idx[key] != null ? (vals[idx[key]] || '').trim() : '');
+
+  const byEmp = new Map(); // Employee Id -> consolidated member
+  let rawRowCount = 0;
+  for (const line of lines.slice(1)) {
+    const vals = splitCSVLine(line);
+    const empId = col(vals, 'employeeid');
+    if (!empId) continue;
+    rawRowCount++;
+    let m = byEmp.get(empId);
+    if (!m) {
+      m = {
+        badgeNumber: empId, // "Employee Id" = the app's Team Member ID
+        firstName: col(vals, 'preferredfirstname') || col(vals, 'firstname') || col(vals, 'preferredname'),
+        lastName: col(vals, 'lastname'),
+        email: (col(vals, 'personalemail') || col(vals, 'email')),
+        phone: sanitizePhone(col(vals, 'mobilephone')) || sanitizePhone(col(vals, 'homephone')),
+        _locations: [],
+        _roles: [],
+      };
+      byEmp.set(empId, m);
+    }
+    if (!m.phone) m.phone = sanitizePhone(col(vals, 'mobilephone')) || sanitizePhone(col(vals, 'homephone'));
+    const loc = col(vals, 'locationdescription');
+    if (loc && !m._locations.some(l => l.toLowerCase() === loc.toLowerCase())) m._locations.push(loc);
+    // "Position Description" is the job title → the app role. "Needed" is a
+    // Paylocity placeholder for an unassigned position, so skip it.
+    const pos = col(vals, 'positiondescription');
+    if (pos && !/^needed$/i.test(pos) && !m._roles.some(r => r.toLowerCase() === pos.toLowerCase())) m._roles.push(pos);
+  }
+
+  const rows = [...byEmp.values()].map(m => ({
+    badgeNumber: m.badgeNumber,
+    firstName: m.firstName,
+    lastName: m.lastName,
+    email: m.email,
+    phone: m.phone,
+    homeLocationName: m._locations[0] || '',
+    assignedLocationNames: m._locations.join(';'),
+    assignedRoleNames: m._roles.join(';'),
+    _fileLocations: m._locations,
+    _fileRoles: m._roles,
+  }));
+  return { headers: rawHeaders, rows, format: 'paylocity_contact_list', rawRowCount };
+}
+
 // Small delay to avoid rate limits
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -99,6 +208,7 @@ export default function ImportTeamMembersModal({ open, onClose, onImported }) {
   const [preview, setPreview] = useState(null);
   const [importing, setImporting] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
+  const [autoCreate, setAutoCreate] = useState(true); // create unrecognized locations/roles
   const [results, setResults] = useState(null); // { succeeded, failed, importedIds }
   const fileInputRef = useRef();
 
@@ -169,7 +279,13 @@ export default function ImportTeamMembersModal({ open, onClose, onImported }) {
     setFile(f);
     setResults(null);
     const reader = new FileReader();
-    reader.onload = (ev) => setPreview(parseCSV(ev.target.result));
+    reader.onload = (ev) => {
+      const text = ev.target.result;
+      // A raw Paylocity "Employee Personal Contact List" export (one row per
+      // location) is consolidated automatically; anything else uses the
+      // one-row-per-person template format.
+      setPreview(isPaylocityContactList(text) ? parsePaylocityContactList(text) : parseCSV(text));
+    };
     reader.readAsText(f);
   };
 
@@ -185,9 +301,30 @@ export default function ImportTeamMembersModal({ open, onClose, onImported }) {
     return { ids, missing };
   };
 
-  const unknownColumns = preview
+  // The Paylocity export is parsed by a dedicated consolidator, so its extra
+  // columns (Company Code, Department, Position…) are ignored by design.
+  const unknownColumns = preview && preview.format !== 'paylocity_contact_list'
     ? preview.headers.filter(h => !EXPECTED_COLUMNS.includes(h))
     : [];
+
+  const isPaylocity = preview?.format === 'paylocity_contact_list';
+  // For the Paylocity preview: every distinct location/role in the file, how many
+  // members reference it, and whether it already exists in the app.
+  const buildMap = (getter, list) => {
+    const counts = new Map();
+    preview.rows.forEach(r => (r[getter] || []).forEach(n => counts.set(n, (counts.get(n) || 0) + 1)));
+    return [...counts.entries()].map(([name, count]) => ({
+      name, count,
+      matched: list.some(x => x.name.toLowerCase() === name.toLowerCase()),
+    })).sort((a, b) => b.count - a.count);
+  };
+  const locationMap = isPaylocity ? buildMap('_fileLocations', locations) : [];
+  const roleMap = isPaylocity ? buildMap('_fileRoles', roles) : [];
+  const newLocations = locationMap.filter(l => !l.matched);
+  const newRoles = roleMap.filter(r => !r.matched);
+  const missingEmailCount = isPaylocity
+    ? preview.rows.filter(r => !r.email || !EMAIL_RE.test(r.email.trim())).length
+    : 0;
 
   const handleImport = async () => {
     if (!preview?.rows?.length) return;
@@ -217,6 +354,50 @@ export default function ImportTeamMembersModal({ open, onClose, onImported }) {
     const revive = [];
     const updates = [];
     const unchanged = [];
+    // Paylocity path: an unknown location/role (e.g. a room or job title not yet
+    // set up in the app) should NOT drop the whole person — assign what matches
+    // and tally the rest.
+    const lenient = preview.format === 'paylocity_contact_list';
+    const unmatchedLocations = new Map(); // name -> # of members referencing it
+    const unmatchedRoles = new Map();
+
+    // Working copies so newly auto-created records are immediately resolvable.
+    let workLocations = [...locations];
+    let workRoles = [...roles];
+    const createdLocations = [];
+    const createdRoles = [];
+    if (lenient && autoCreate) {
+      // Create every location/role the file references that doesn't exist yet,
+      // so members can be linked to them in the same run.
+      for (const l of newLocations) {
+        try {
+          const created = await base44.entities.Location.create({
+            name: l.name, abbreviation: deriveAbbrev(l.name),
+            state: 'TX', timezone: 'America/Chicago', status: 'active',
+          });
+          workLocations.push(created);
+          createdLocations.push(l.name);
+        } catch (err) {
+          console.error('auto-create location failed', l.name, err);
+        }
+      }
+      for (const r of newRoles) {
+        try {
+          const created = await base44.entities.Role.create({
+            name: r.name, roleGroup: inferRoleGroup(r.name),
+            color: '#3B82F6', displayOrder: 0, status: 'active',
+          });
+          workRoles.push(created);
+          createdRoles.push(r.name);
+        } catch (err) {
+          console.error('auto-create role failed', r.name, err);
+        }
+      }
+      if (createdLocations.length || createdRoles.length) {
+        queryClient.invalidateQueries({ queryKey: ['locations'] });
+        queryClient.invalidateQueries({ queryKey: ['roles'] });
+      }
+    }
 
     // does the file actually change anything on this member? (blank cells are
     // "no opinion" — they never overwrite existing data)
@@ -237,11 +418,11 @@ export default function ImportTeamMembersModal({ open, onClose, onImported }) {
         continue;
       }
       if (badge && fileBadges.has(badgeKey)) {
-        failed.push({ row, reason: `Badge # "${badge}" appears twice in the file` });
+        failed.push({ row, reason: `Team Member ID "${badge}" appears twice in the file` });
         continue;
       }
       if (badge && badgeOwner.has(badgeKey) && badgeOwner.get(badgeKey) !== email) {
-        failed.push({ row, reason: `Badge # "${badge}" belongs to another team member` });
+        failed.push({ row, reason: `Team Member ID "${badge}" belongs to another team member` });
         continue;
       }
 
@@ -265,14 +446,31 @@ export default function ImportTeamMembersModal({ open, onClose, onImported }) {
 
       const homeName = (row.homeLocationName || '').trim();
       const homeLocation = homeName
-        ? locations.find(l => l.name.toLowerCase() === homeName.toLowerCase())
+        ? workLocations.find(l => l.name.toLowerCase() === homeName.toLowerCase())
         : undefined;
-      if (homeName && !homeLocation) problems.push(`unknown location "${homeName}"`);
 
-      const locRes = resolveIdsStrict(row.assignedLocationNames, locations);
-      if (locRes.missing.length) problems.push(`unknown location(s): ${locRes.missing.join(', ')}`);
-      const roleRes = resolveIdsStrict(row.assignedRoleNames, roles);
-      if (roleRes.missing.length) problems.push(`unknown role(s): ${roleRes.missing.join(', ')}`);
+      const locRes = resolveIdsStrict(row.assignedLocationNames, workLocations);
+      if (locRes.missing.length) {
+        if (lenient) {
+          locRes.missing.forEach(n => unmatchedLocations.set(n, (unmatchedLocations.get(n) || 0) + 1));
+        } else {
+          problems.push(`unknown location(s): ${locRes.missing.join(', ')}`);
+        }
+      }
+      if (homeName && !homeLocation && !lenient) problems.push(`unknown location "${homeName}"`);
+      // In lenient mode the home location falls back to the first matched one
+      const homeLocationId = lenient
+        ? (homeLocation?.id || locRes.ids[0] || undefined)
+        : (homeLocation?.id || undefined);
+
+      const roleRes = resolveIdsStrict(row.assignedRoleNames, workRoles);
+      if (roleRes.missing.length) {
+        if (lenient) {
+          roleRes.missing.forEach(n => unmatchedRoles.set(n, (unmatchedRoles.get(n) || 0) + 1));
+        } else {
+          problems.push(`unknown role(s): ${roleRes.missing.join(', ')}`);
+        }
+      }
 
       if (problems.length) {
         failed.push({ row, reason: problems.join('; ') });
@@ -301,7 +499,7 @@ export default function ImportTeamMembersModal({ open, onClose, onImported }) {
         permissionLevel: rawPerm || undefined,    // blank = leave as-is / DB default
         emergencyContactName: row.emergencyContactName || undefined,
         emergencyContactPhone: row.emergencyContactPhone || undefined,
-        homeLocationId: homeLocation?.id || undefined,
+        homeLocationId: homeLocationId,
         assignedLocationIds: locRes.ids.length ? locRes.ids : undefined,
         assignedRoleIds: roleRes.ids.length ? roleRes.ids : undefined,
       };
@@ -371,7 +569,12 @@ export default function ImportTeamMembersModal({ open, onClose, onImported }) {
     setImportProgress(100);
     // keep our all-members cache fresh so a follow-up import diffs correctly
     queryClient.invalidateQueries({ queryKey: ['teamMembers-all'] });
-    setResults({ succeeded, updated: updatedRows, unchanged, failed, importedIds });
+    setResults({
+      succeeded, updated: updatedRows, unchanged, failed, importedIds,
+      unmatchedLocations: [...unmatchedLocations.entries()].sort((a, b) => b[1] - a[1]),
+      unmatchedRoles: [...unmatchedRoles.entries()].sort((a, b) => b[1] - a[1]),
+      createdLocations, createdRoles,
+    });
     setImporting(false);
     if (succeeded.length > 0 || updatedRows.length > 0) {
       const parts = [];
@@ -392,12 +595,12 @@ export default function ImportTeamMembersModal({ open, onClose, onImported }) {
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Import Team Members via CSV</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-4 overflow-y-auto flex-1 min-h-0 -mr-2 pr-2">
           {!results && (
             <>
               <div className="text-sm text-muted-foreground space-y-1">
@@ -460,10 +663,91 @@ export default function ImportTeamMembersModal({ open, onClose, onImported }) {
                 />
               </div>
 
-              {preview && preview.rows.length > 0 && (
+              {preview && preview.rows.length > 0 && !isPaylocity && (
                 <div className="rounded-lg border bg-muted/30 p-3 text-sm">
                   <p className="font-medium mb-1">{preview.rows.length} row{preview.rows.length > 1 ? 's' : ''} detected</p>
                   <p className="text-xs text-muted-foreground">Columns: {preview.headers.join(', ')}</p>
+                </div>
+              )}
+
+              {isPaylocity && preview.rows.length > 0 && (
+                <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm space-y-2">
+                  <div>
+                    <p className="font-medium">Paylocity Contact List detected</p>
+                    <p className="text-xs text-muted-foreground">
+                      <span className="font-semibold text-foreground">{preview.rows.length}</span> team members
+                      consolidated from <span className="font-semibold text-foreground">{preview.rawRowCount}</span> rows.
+                      Multiple location rows per person are merged into their assigned locations.
+                      "Employee Id" is imported as the <span className="font-medium">Team Member ID</span>; phone numbers are cleaned automatically.
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium mb-1">
+                      Location mapping <span className="normal-case font-normal">({locationMap.length})</span>
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {locationMap.map(l => (
+                        <Badge
+                          key={l.name}
+                          variant="outline"
+                          className={l.matched
+                            ? 'text-xs border-emerald-300 text-emerald-700 dark:text-emerald-400'
+                            : 'text-xs border-sky-300 text-sky-700 dark:text-sky-400'}
+                        >
+                          {l.matched ? '✓' : (autoCreate ? '+' : '⚠')} {l.name} ({l.count})
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium mb-1">
+                      Role mapping <span className="normal-case font-normal">(from job titles · {roleMap.length})</span>
+                    </p>
+                    <div className="flex flex-wrap gap-1 max-h-28 overflow-y-auto">
+                      {roleMap.map(r => (
+                        <Badge
+                          key={r.name}
+                          variant="outline"
+                          className={r.matched
+                            ? 'text-xs border-emerald-300 text-emerald-700 dark:text-emerald-400'
+                            : 'text-xs border-sky-300 text-sky-700 dark:text-sky-400'}
+                        >
+                          {r.matched ? '✓' : (autoCreate ? '+' : '⚠')} {r.name} ({r.count})
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+
+                  {(newLocations.length > 0 || newRoles.length > 0) && (
+                    <label className="flex items-start gap-2 rounded-md border border-border bg-background/60 p-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={autoCreate}
+                        onChange={e => setAutoCreate(e.target.checked)}
+                        className="mt-0.5"
+                      />
+                      <span className="text-xs">
+                        <span className="font-medium">Auto-create the {newLocations.length + newRoles.length} new item{newLocations.length + newRoles.length > 1 ? 's' : ''}</span>{' '}
+                        (<span className="text-sky-600 dark:text-sky-400">+</span>) so members get linked to them right away
+                        {newLocations.length > 0 && <> · {newLocations.length} location{newLocations.length > 1 ? 's' : ''}: {newLocations.map(l => l.name).join(', ')}</>}
+                        {newRoles.length > 0 && <> · {newRoles.length} role{newRoles.length > 1 ? 's' : ''}</>}
+                        <span className="block text-muted-foreground mt-0.5">
+                          {autoCreate
+                            ? 'New roles are grouped by best guess — review them under Roles afterward.'
+                            : 'Unchecked: members still import, just without the unrecognized location/role.'}
+                        </span>
+                      </span>
+                    </label>
+                  )}
+
+                  {missingEmailCount > 0 && (
+                    <p className="text-[11px] text-amber-600/90 dark:text-amber-400/90">
+                      {missingEmailCount} member{missingEmailCount > 1 ? 's have' : ' has'} no email in the file and can't be imported
+                      (email is the account key) — add it in Paylocity and re-upload.
+                    </p>
+                  )}
                 </div>
               )}
               {unknownColumns.length > 0 && (
@@ -497,7 +781,7 @@ export default function ImportTeamMembersModal({ open, onClose, onImported }) {
           {results && (() => {
             // group non-imports by category; skips are informational, not failures
             const categorize = (reason) => {
-              if (/Badge #|Duplicate row/.test(reason)) return 'Duplicate badge or row';
+              if (/Team Member ID|Duplicate row/.test(reason)) return 'Duplicate ID or row';
               if (/Missing required/.test(reason)) return 'Missing name or email';
               if (/invalid email/.test(reason)) return 'Invalid email';
               if (/invalid dateOfBirth|invalid startDate/.test(reason)) return 'Invalid date format';
@@ -532,6 +816,32 @@ export default function ImportTeamMembersModal({ open, onClose, onImported }) {
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <CheckCircle className="w-4 h-4 opacity-50" />
                     <span>{results.unchanged.length} unchanged — already up to date</span>
+                  </div>
+                )}
+                {(results.createdLocations?.length > 0 || results.createdRoles?.length > 0) && (
+                  <div className="rounded bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 px-2.5 py-2 text-xs text-sky-700 dark:text-sky-400">
+                    <p className="font-medium mb-0.5">Auto-created and assigned:</p>
+                    {results.createdLocations?.length > 0 && (
+                      <p>{results.createdLocations.length} location{results.createdLocations.length > 1 ? 's' : ''}: {results.createdLocations.join(', ')}</p>
+                    )}
+                    {results.createdRoles?.length > 0 && (
+                      <p>{results.createdRoles.length} role{results.createdRoles.length > 1 ? 's' : ''}: {results.createdRoles.join(', ')}</p>
+                    )}
+                    <p className="mt-0.5 opacity-80">Review new roles' groups/colors under Roles when you get a chance.</p>
+                  </div>
+                )}
+                {results.unmatchedLocations?.length > 0 && (
+                  <div className="rounded bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-2.5 py-2 text-xs text-amber-700 dark:text-amber-400">
+                    <p className="font-medium mb-0.5">Locations not set up (members imported without them):</p>
+                    <p>{results.unmatchedLocations.map(([name, n]) => `${name} (${n})`).join(' · ')}</p>
+                    <p className="mt-0.5 opacity-80">Turn on auto-create (or add them under Locations) and re-upload to fill them in.</p>
+                  </div>
+                )}
+                {results.unmatchedRoles?.length > 0 && (
+                  <div className="rounded bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-2.5 py-2 text-xs text-amber-700 dark:text-amber-400">
+                    <p className="font-medium mb-0.5">Roles not set up (members imported without them):</p>
+                    <p>{results.unmatchedRoles.map(([name, n]) => `${name} (${n})`).join(' · ')}</p>
+                    <p className="mt-0.5 opacity-80">Turn on auto-create and re-upload to add them.</p>
                   </div>
                 )}
                 {errorCount > 0 && (

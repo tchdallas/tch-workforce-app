@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useLocations, useRoles } from '@/lib/useAppData';
+import { useCurrentMember } from '@/hooks/useCurrentMember';
 import { format, startOfWeek, addDays } from 'date-fns';
 import PageHeader from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -42,8 +43,7 @@ function ShiftSlot({ shift, role, onEdit, onRemove, selected, onSelect }) {
   );
 }
 
-function ShiftSlotModal({ open, onClose, onSave, roles, initial }) {
-  const isEditing = !!initial?.roleId; // editing existing if it already has a role
+function ShiftSlotModal({ open, onClose, onSave, roles, initial, isEditing = false }) {
   const [roleId, setRoleId] = useState(initial?.roleId || '');
   const [dayOfWeek, setDayOfWeek] = useState(initial?.dayOfWeek ?? 0);
   const [startTime, setStartTime] = useState(initial?.startTime || '09:00');
@@ -175,12 +175,29 @@ function TemplateGrid({ template, roles, onUpdate }) {
   // clipboard: { shifts: [...], mode: 'copy'|'cut', srcIndices: Set }
   const [clipboard, setClipboard] = useState(null);
   const [undoStack, setUndoStack] = useState([]);
+  const [collapsedRoles, setCollapsedRoles] = useState(new Set());
   const shiftsRef = React.useRef(template.shifts || []);
   const shifts = template.shifts || [];
   useEffect(() => { shiftsRef.current = shifts; }, [shifts]);
 
-  const openAdd = (dayOfWeek) => {
-    setSlotModal({ open: true, editing: { dayOfWeek }, editIndex: null });
+  const toggleRole = (id) => setCollapsedRoles(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+
+  // Shifts keep their original index (selection/undo work by index), grouped
+  // into one collapsible row per role used in this template.
+  const indexed = shifts.map((s, i) => ({ s, i }));
+  const usedRoleIds = new Set(shifts.map(s => s.roleId).filter(Boolean));
+  const knownRoleIds = new Set(roles.map(r => r.id));
+  const rolesUsed = [
+    ...roles.filter(r => usedRoleIds.has(r.id)), // ordered by displayOrder from useRoles
+    ...[...usedRoleIds].filter(id => !knownRoleIds.has(id)).map(id => ({ id, name: 'Unknown role', color: '#6366f1' })),
+  ];
+
+  const openAdd = (dayOfWeek, roleId) => {
+    setSlotModal({ open: true, editing: { dayOfWeek, roleId }, editIndex: null });
   };
 
   const openEdit = (shift, idx) => {
@@ -355,38 +372,88 @@ function TemplateGrid({ template, roles, onUpdate }) {
         className="overflow-x-auto"
         onClick={() => { clearSelection(); }}
       >
-        <div className="grid" style={{ gridTemplateColumns: `100px repeat(7, minmax(90px, 1fr))`, minWidth: '750px' }}>
+        <div className="grid" style={{ gridTemplateColumns: `150px repeat(7, minmax(90px, 1fr))`, minWidth: '820px' }}>
           {/* Header */}
           <div className="p-2 text-xs font-semibold text-muted-foreground">Role</div>
           {DAYS.map((d, i) => (
             <div key={i} className="p-2 text-center text-xs font-semibold text-muted-foreground border-l border-border">{d}</div>
           ))}
           <div className="col-span-8 border-t border-border" />
-          <div className="p-2 text-xs text-muted-foreground">Shifts</div>
+
+          {/* One collapsible row per role, shifts sorted by start time per day */}
+          {rolesUsed.map(role => {
+            const collapsed = collapsedRoles.has(role.id);
+            const roleCount = indexed.filter(x => x.s.roleId === role.id).length;
+            return (
+              <React.Fragment key={role.id}>
+                <div
+                  className="p-2 flex items-center gap-1.5 cursor-pointer hover:bg-muted/30 border-t border-border/40"
+                  onClick={(e) => { e.stopPropagation(); toggleRole(role.id); }}
+                >
+                  {collapsed
+                    ? <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                    : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
+                  <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: role.color || '#6366f1' }} />
+                  <span className="text-xs font-medium truncate">{role.name}</span>
+                  <span className="text-[10px] text-muted-foreground ml-auto shrink-0">{roleCount}</span>
+                </div>
+                {Array.from({ length: 7 }, (_, dayIdx) => {
+                  const cellShifts = indexed
+                    .filter(x => x.s.roleId === role.id && x.s.dayOfWeek === dayIdx)
+                    .sort((a, b) => (a.s.startTime || '').localeCompare(b.s.startTime || ''));
+                  return (
+                    <div
+                      key={dayIdx}
+                      className={cn(
+                        "p-1 border-l border-t border-border/40 relative",
+                        collapsed ? "min-h-0" : "min-h-[56px]",
+                        clipboard && !collapsed && "hover:bg-primary/5 cursor-pointer"
+                      )}
+                      onClick={(e) => { e.stopPropagation(); if (clipboard) handlePaste(dayIdx); else clearSelection(); }}
+                    >
+                      {!collapsed && cellShifts.map(({ s, i }) => (
+                        <ShiftSlot
+                          key={i}
+                          shift={s}
+                          role={role.name === 'Unknown role' ? null : role}
+                          selected={selectedIndices.has(i)}
+                          onSelect={(e) => handleSelect(i, e)}
+                          onEdit={() => openEdit(s, i)}
+                          onRemove={() => handleRemove(i)}
+                        />
+                      ))}
+                      {!collapsed && (
+                        <button
+                          className="mt-1 flex items-center justify-center w-full"
+                          onClick={(e) => { e.stopPropagation(); openAdd(dayIdx, role.id); }}
+                          title={`Add ${role.name} shift`}
+                        >
+                          <div className="w-5 h-5 rounded-full bg-muted border border-border flex items-center justify-center hover:bg-primary/10">
+                            <Plus className="w-3 h-3 text-muted-foreground" />
+                          </div>
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </React.Fragment>
+            );
+          })}
+
+          {/* Trailing row: add a shift for any role (incl. one not yet in the template) */}
+          <div className="p-2 text-[11px] text-muted-foreground border-t border-border flex items-center gap-1">
+            <Plus className="w-3 h-3" /> Add
+          </div>
           {Array.from({ length: 7 }, (_, dayIdx) => (
             <div
-              key={dayIdx}
-              className={cn("p-1 border-l border-border min-h-[80px] relative", clipboard && "hover:bg-primary/5 cursor-pointer")}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (clipboard) handlePaste(dayIdx);
-                else clearSelection();
-              }}
+              key={`add-${dayIdx}`}
+              className={cn("p-1 border-l border-t border-border relative", clipboard && "hover:bg-primary/5 cursor-pointer")}
+              onClick={(e) => { e.stopPropagation(); if (clipboard) handlePaste(dayIdx); }}
             >
-              {shifts.map((s, i) => s.dayOfWeek === dayIdx ? (
-                <ShiftSlot
-                  key={i}
-                  shift={s}
-                  role={roles.find(r => r.id === s.roleId)}
-                  selected={selectedIndices.has(i)}
-                  onSelect={(e) => handleSelect(i, e)}
-                  onEdit={() => openEdit(s, i)}
-                  onRemove={() => handleRemove(i)}
-                />
-              ) : null)}
               <button
                 className="mt-1 flex items-center justify-center w-full"
                 onClick={(e) => { e.stopPropagation(); openAdd(dayIdx); }}
+                title="Add shift (choose role)"
               >
                 <div className="w-5 h-5 rounded-full bg-muted border border-border flex items-center justify-center hover:bg-primary/10">
                   <Plus className="w-3 h-3 text-muted-foreground" />
@@ -402,6 +469,7 @@ function TemplateGrid({ template, roles, onUpdate }) {
         onSave={handleSave}
         roles={roles}
         initial={slotModal.editing}
+        isEditing={slotModal.editIndex !== null}
       />
     </>
   );
@@ -517,6 +585,8 @@ export default function ScheduleTemplates() {
   const queryClient = useQueryClient();
   const { data: roles = [] } = useRoles();
   const { data: locations = [] } = useLocations();
+  const { scopeLocations, canSeeAllLocations, assignedLocationIds } = useCurrentMember();
+  const scopedLocations = scopeLocations(locations); // locations this user may manage
   const [filterLocation, setFilterLocation] = useState('all');
   const [newModal, setNewModal] = useState(false);
 
@@ -541,9 +611,14 @@ export default function ScheduleTemplates() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['schedule-templates'] }); toast.success('Template archived'); },
   });
 
-  const filtered = filterLocation === 'all'
+  // Location-scoped users only see templates for their locations (plus generic,
+  // no-location templates that apply everywhere).
+  const visibleTemplates = canSeeAllLocations
     ? templates
-    : templates.filter(t => !t.locationId || t.locationId === filterLocation);
+    : templates.filter(t => !t.locationId || assignedLocationIds.includes(t.locationId));
+  const filtered = filterLocation === 'all'
+    ? visibleTemplates
+    : visibleTemplates.filter(t => !t.locationId || t.locationId === filterLocation);
 
   const handleSave = (template) => {
     const { id, created_date, updated_date, ...data } = template;
@@ -594,7 +669,7 @@ export default function ScheduleTemplates() {
         open={newModal}
         onClose={() => setNewModal(false)}
         onCreate={(data) => createMutation.mutate(data)}
-        locations={locations}
+        locations={scopedLocations}
       />
     </div>
   );

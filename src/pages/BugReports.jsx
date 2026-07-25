@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Bug, ChevronDown, Copy, ExternalLink, Image as ImageIcon } from 'lucide-react';
+import { Bug, ChevronDown, Copy, ExternalLink, Image as ImageIcon, Lightbulb } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -19,7 +19,11 @@ const STATUSES = {
   new: { label: 'New', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
   investigating: { label: 'Investigating', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' },
   resolved: { label: 'Resolved', cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' },
-  not_a_bug: { label: 'Not a bug', cls: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400' },
+  not_a_bug: { label: 'Dismissed', cls: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400' },
+};
+const KIND = {
+  bug: { label: 'Bug', icon: Bug, cls: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' },
+  feature: { label: 'Feature', icon: Lightbulb, cls: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300' },
 };
 const SEV = {
   high: { label: 'Blocking', cls: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' },
@@ -57,9 +61,27 @@ function BugCard({ bug, name, memberId }) {
     update.mutate(patch);
   };
 
+  const isFeature = bug.kind === 'feature';
   const copyForDev = () => {
     const errs = (bug.consoleLog || []).map((e) => `  [${e.level}] ${e.msg}`).join('\n') || '  (none)';
-    const text =
+    const text = isFeature
+?
+`FEATURE REQUEST — ${bug.id}
+Requested by: ${name} (${bug.reporterId || 'unknown'})
+When: ${bug.created_date ? format(new Date(bug.created_date), 'PPpp') : ''}
+Page: ${bug.route}
+Importance: ${bug.severity}
+App version: ${bug.appVersion}
+
+What they'd like:
+${bug.description}
+
+Why it would help:
+${bug.steps || '(not provided)'}
+
+How they picture it:
+${bug.expected || '(not provided)'}`
+:
 `BUG REPORT — ${bug.id}
 Reported by: ${name} (${bug.reporterId || 'unknown'})
 When: ${bug.created_date ? format(new Date(bug.created_date), 'PPpp') : ''}
@@ -87,14 +109,17 @@ ${errs}`;
 
   const st = STATUSES[bug.status] || STATUSES.new;
   const sev = SEV[bug.severity] || SEV.medium;
+  const kind = KIND[bug.kind] || KIND.bug;
+  const KindIcon = kind.icon;
 
   return (
     <Card>
       <CardContent className="p-0">
         <button type="button" onClick={expand} className="w-full text-left p-4 flex items-start gap-3">
-          <Bug className="w-4 h-4 mt-0.5 text-muted-foreground shrink-0" />
+          <KindIcon className="w-4 h-4 mt-0.5 text-muted-foreground shrink-0" />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
+              <Badge className={cn('text-[10px] border-0', kind.cls)}>{kind.label}</Badge>
               <Badge className={cn('text-[10px] border-0', sev.cls)}>{sev.label}</Badge>
               <Badge className={cn('text-[10px] border-0', st.cls)}>{st.label}</Badge>
               <span className="text-xs text-muted-foreground font-mono">{bug.route}</span>
@@ -111,9 +136,9 @@ ${errs}`;
         {open && (
           <div className="px-4 pb-4 space-y-3 border-t border-border pt-3">
             <div className="grid sm:grid-cols-2 gap-3 text-sm">
-              <Detail label="What went wrong">{bug.description}</Detail>
-              <Detail label="What they were doing">{bug.steps || '—'}</Detail>
-              <Detail label="Expected">{bug.expected || '—'}</Detail>
+              <Detail label={isFeature ? "What they'd like" : 'What went wrong'}>{bug.description}</Detail>
+              <Detail label={isFeature ? 'Why it would help' : 'What they were doing'}>{bug.steps || '—'}</Detail>
+              <Detail label={isFeature ? 'How they picture it' : 'Expected'}>{bug.expected || '—'}</Detail>
               <Detail label="Device">{bug.viewport} · <span className="break-all text-xs">{bug.userAgent}</span></Detail>
             </div>
 
@@ -188,6 +213,7 @@ export default function BugReports() {
   const { data: teamMembers = [] } = useTeamMembers();
   const { member } = useCurrentMember();
   const [filter, setFilter] = useState('open');
+  const [kindFilter, setKindFilter] = useState('all'); // all | bug | feature
 
   const { data: bugs = [], isLoading } = useQuery({
     queryKey: ['bug-reports'],
@@ -201,18 +227,28 @@ export default function BugReports() {
   };
 
   const shown = bugs.filter((b) => {
+    if (kindFilter !== 'all' && (b.kind || 'bug') !== kindFilter) return false;
     if (filter === 'all') return true;
     if (filter === 'open') return b.status === 'new' || b.status === 'investigating';
     return b.status === filter;
   });
   const openCount = bugs.filter((b) => b.status === 'new' || b.status === 'investigating').length;
+  const featureCount = bugs.filter((b) => b.kind === 'feature').length;
 
   return (
     <div className="max-w-3xl mx-auto">
-      <PageHeader title="Bug Reports" subtitle={`${openCount} open · ${bugs.length} total`} />
+      <PageHeader title="Feedback" subtitle={`${openCount} open · ${featureCount} request${featureCount === 1 ? '' : 's'} · ${bugs.length} total`} />
+
+      <div className="flex gap-2 mb-3 flex-wrap">
+        {[['all', 'All types'], ['bug', 'Bugs'], ['feature', 'Requests']].map(([v, l]) => (
+          <Button key={v} size="sm" variant={kindFilter === v ? 'default' : 'outline'} onClick={() => setKindFilter(v)} className="text-xs h-8">
+            {l}
+          </Button>
+        ))}
+      </div>
 
       <div className="flex gap-2 mb-4 flex-wrap">
-        {[['open', 'Open'], ['new', 'New'], ['investigating', 'Investigating'], ['resolved', 'Resolved'], ['not_a_bug', 'Not a bug'], ['all', 'All']].map(([v, l]) => (
+        {[['open', 'Open'], ['new', 'New'], ['investigating', 'Investigating'], ['resolved', 'Resolved'], ['not_a_bug', 'Dismissed'], ['all', 'All']].map(([v, l]) => (
           <Button key={v} size="sm" variant={filter === v ? 'default' : 'outline'} onClick={() => setFilter(v)} className="text-xs h-8">
             {l}
           </Button>

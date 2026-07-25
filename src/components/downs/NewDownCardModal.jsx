@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { supabase } from '@/api/supabase';
 import { useTeamMembers } from '@/lib/useAppData';
+import { useCurrentMember } from '@/hooks/useCurrentMember';
 import { payPeriodLabel, payPeriodFor, isoDate } from '@/lib/downs';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -50,6 +51,7 @@ let tmpId = 0;
 export default function NewDownCardModal({ open, onClose, onSaved, locations = [], tournaments = [], series = [] }) {
   const qc = useQueryClient();
   const { data: teamMembers = [] } = useTeamMembers();
+  const { scopeLocations } = useCurrentMember();
 
   const [cardDate, setCardDate] = useState(todayIso());
   const [tournamentId, setTournamentId] = useState('');
@@ -228,7 +230,7 @@ export default function NewDownCardModal({ open, onClose, onSaved, locations = [
                   <Select value={newTournamentLoc} onValueChange={setNewTournamentLoc}>
                     <SelectTrigger><SelectValue placeholder="Location" /></SelectTrigger>
                     <SelectContent>
-                      {locations.filter(l => l.status === 'active').map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
+                      {scopeLocations(locations.filter(l => l.status === 'active')).map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>

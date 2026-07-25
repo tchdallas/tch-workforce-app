@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useLocations, useRoles, usePars, useParTemplates, businessDayStartHour } from '@/lib/useAppData';
 import { isRoleAvailableAtLocation } from '@/lib/roleLocations';
+import { useCurrentMember } from '@/hooks/useCurrentMember';
 import PageHeader from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,7 +15,10 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Plus, Save, Wand2, Copy, Pencil, Trash2, Star } from 'lucide-react';
+import { Plus, Save, Wand2, Copy, Pencil, Trash2, Star, ChevronsUpDown, Check } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -34,6 +38,7 @@ const key = (day, t) => `${day}|${t}`;
 export default function ParLevels() {
   const qc = useQueryClient();
   const { data: locations = [] } = useLocations();
+  const { scopeLocations } = useCurrentMember();
   const { data: roles = [] } = useRoles();
   const { data: pars = [] } = usePars();
   const { data: templates = [] } = useParTemplates();
@@ -41,7 +46,10 @@ export default function ParLevels() {
     queryKey: ['app-settings'], queryFn: () => base44.entities.AppSetting.list(), placeholderData: [],
   });
 
-  const activeLocations = useMemo(() => locations.filter(l => l.status === 'active'), [locations]);
+  const activeLocations = useMemo(
+    () => scopeLocations(locations.filter(l => l.status === 'active')),
+    [locations, scopeLocations]
+  );
   const [locationId, setLocationId] = useState('');
   const templatesForLoc = useMemo(
     () => templates.filter(t => t.locationId === locationId).sort((a, b) => a.name.localeCompare(b.name)),
@@ -50,10 +58,13 @@ export default function ParLevels() {
   const [templateId, setTemplateId] = useState('');
 
   const availableRoles = useMemo(
-    () => roles.filter(r => r.status === 'active' && (!locationId || isRoleAvailableAtLocation(r, locationId))),
+    () => roles
+      .filter(r => r.status === 'active' && (!locationId || isRoleAvailableAtLocation(r, locationId)))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })),
     [roles, locationId]
   );
   const [roleId, setRoleId] = useState('');
+  const [rolePickerOpen, setRolePickerOpen] = useState(false);
 
   useEffect(() => { if (!locationId && activeLocations.length) setLocationId(activeLocations[0].id); }, [activeLocations, locationId]);
   // when location changes, pick its default template (or first)
@@ -111,22 +122,21 @@ export default function ParLevels() {
     setDirty(true);
   };
 
+  // One window PER filled cell — par counts shift starts, so each time slot is an
+  // independent requirement (do NOT merge equal neighbors, or 3p+4p+5p each = 1
+  // collapses to a single "1" and the day undercounts its true shift total).
   const buildWindows = () => {
     const out = [];
     for (let day = 0; day < 7; day++) {
-      let i = 0;
-      while (i < rowTimes.length) {
+      for (let i = 0; i < rowTimes.length; i++) {
         const v = grid[key(day, rowTimes[i])];
-        if (v == null) { i++; continue; }
-        let j = i;
-        while (j + 1 < rowTimes.length && grid[key(day, rowTimes[j + 1])] === v) j++;
+        if (v == null) continue;
         out.push({
           templateId, roleId, dayOfWeek: day,
           startTime: rowTimes[i],
-          endTime: j + 1 < rowTimes.length ? rowTimes[j + 1] : gamingDayEnd,
+          endTime: i + 1 < rowTimes.length ? rowTimes[i + 1] : gamingDayEnd,
           requiredCount: v,
         });
-        i = j + 1;
       }
     }
     return out;
@@ -296,16 +306,43 @@ export default function ParLevels() {
         {hasTemplate && (
           <div>
             <Label className="text-xs">Role</Label>
-            <Select value={roleId} onValueChange={setRoleId}>
-              <SelectTrigger className="w-[180px]"><SelectValue placeholder="Role" /></SelectTrigger>
-              <SelectContent>
-                {availableRoles.map(r => (
-                  <SelectItem key={r.id} value={r.id}>
-                    <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full" style={{ backgroundColor: r.color || '#6366f1' }} />{r.name}</div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover open={rolePickerOpen} onOpenChange={setRolePickerOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" role="combobox" className="w-[180px] justify-between font-normal">
+                  {(() => {
+                    const r = availableRoles.find(x => x.id === roleId);
+                    return r ? (
+                      <span className="flex items-center gap-2 min-w-0">
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: r.color || '#6366f1' }} />
+                        <span className="truncate">{r.name}</span>
+                      </span>
+                    ) : <span className="text-muted-foreground">Role</span>;
+                  })()}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[220px] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Search roles…" />
+                  <CommandList>
+                    <CommandEmpty>No role found.</CommandEmpty>
+                    <CommandGroup>
+                      {availableRoles.map(r => (
+                        <CommandItem
+                          key={r.id}
+                          value={r.name}
+                          onSelect={() => { setRoleId(r.id); setRolePickerOpen(false); }}
+                        >
+                          <Check className={cn('mr-2 h-4 w-4', roleId === r.id ? 'opacity-100' : 'opacity-0')} />
+                          <span className="w-2 h-2 rounded-full mr-2 shrink-0" style={{ backgroundColor: r.color || '#6366f1' }} />
+                          <span className="truncate">{r.name}</span>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
         )}
         {currentTemplate?.isDefault && <Badge variant="secondary" className="mb-1.5 text-xs gap-1"><Star className="w-3 h-3" />Default</Badge>}

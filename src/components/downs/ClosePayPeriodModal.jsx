@@ -30,7 +30,7 @@ async function fetchPeriodDowns(startIso, endIso, locationIds) {
 
 export default function ClosePayPeriodModal({ open, onClose, onSaved, locations = [] }) {
   const qc = useQueryClient();
-  const { member } = useCurrentMember();
+  const { member, scopeLocations } = useCurrentMember();
   const { data: teamMembers = [] } = useTeamMembers();
   const periods = useMemo(() => recentPayPeriods(6), []);
 
@@ -104,7 +104,7 @@ export default function ClosePayPeriodModal({ open, onClose, onSaved, locations 
           <div>
             <Label className="text-xs">Location(s)</Label>
             <div className="flex flex-wrap gap-1.5 mt-1">
-              {locations.filter(l => l.status === 'active').map(l => (
+              {scopeLocations(locations.filter(l => l.status === 'active')).map(l => (
                 <button key={l.id} type="button" onClick={() => toggleLoc(l.id)}
                   className={cn('px-2.5 py-1 rounded-full text-xs font-medium border transition-colors',
                     locIds.includes(l.id) ? 'bg-primary text-primary-foreground border-primary' : 'bg-transparent text-muted-foreground border-border hover:bg-accent/10')}>

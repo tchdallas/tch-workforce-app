@@ -6,7 +6,9 @@ import ViewSchedule from './ViewSchedule';
 import { startOfWeek, addDays, format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Clipboard, Upload, FileText, Search, X } from 'lucide-react';
+import { Plus, Clipboard, Upload, FileText, Search, X, Filter, Check } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 import PageHeader from '@/components/common/PageHeader';
 import LocationSelector from '@/components/common/LocationSelector';
 import WeekSelector from '@/components/schedule/WeekSelector';
@@ -159,13 +161,20 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  // Auto-select first location if none chosen yet
+  // Auto-select first location if none chosen yet. Scoped users (location_admin,
+  // manager, scheduler) must default to a location they can actually WRITE to —
+  // otherwise the schedule silently points at an inaccessible location and every
+  // shift create/import trips the shifts RLS policy (has_location_access).
   React.useEffect(() => {
     if (!selectedLocation && locations.length > 0) {
       const active = locations.filter(l => l.status === 'active');
-      if (active.length > 0) setSelectedLocation(active[0].id);
+      const scoped = assignedLocationIds.length > 0
+        ? active.filter(l => assignedLocationIds.includes(l.id))
+        : active;
+      const pick = scoped[0] || (assignedLocationIds.length === 0 ? active[0] : null);
+      if (pick) setSelectedLocation(pick.id);
     }
-  }, [locations, selectedLocation]);
+  }, [locations, selectedLocation, assignedLocationIds]);
 
   // Big teams default to showing only scheduled members
   useEffect(() => {
@@ -205,10 +214,58 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
 
   // Roles available at the selected location (keep roles referenced by current shifts so they still render)
   const shiftRoleIds = useMemo(() => shifts.map(s => s.roleId).filter(Boolean), [shifts]);
-  const visibleRoles = useMemo(
-    () => rolesAvailableAtLocation(roles, selectedLocation, shiftRoleIds),
-    [roles, selectedLocation, shiftRoleIds]
-  );
+
+  // Which roles are actually STAFFED here vs anywhere — derived from team members'
+  // role + location assignments. The Paylocity import created every role with no
+  // explicit location (= "all locations"), which flooded each room with corporate
+  // roles it never uses. So for those, scope to where the role is really worked.
+  const { rolesStaffedHere, rolesStaffedAnywhere } = useMemo(() => {
+    const here = new Set(), anywhere = new Set();
+    teamMembers.forEach(tm => {
+      const rids = tm.assignedRoleIds || [];
+      if (!rids.length) return;
+      const locs = new Set([tm.homeLocationId, ...(tm.assignedLocationIds || [])].filter(Boolean));
+      const atHere = locs.has(selectedLocation);
+      rids.forEach(rid => { anywhere.add(rid); if (atHere) here.add(rid); });
+    });
+    return { rolesStaffedHere: here, rolesStaffedAnywhere: anywhere };
+  }, [teamMembers, selectedLocation]);
+
+  const visibleRoles = useMemo(() => {
+    // roles with a shift OR a par target here are clearly relevant → always render
+    const keep = new Set([...shiftRoleIds, ...planWindows.map(w => w.roleId)]);
+    return roles.filter(r => {
+      if (r.status && r.status !== 'active' && !keep.has(r.id)) return false;
+      if (keep.has(r.id)) return true;
+      if (r.assignedLocationIds?.length) return r.assignedLocationIds.includes(selectedLocation);
+      // no explicit locations: scope to where it's staffed; a role with no staff
+      // anywhere stays available everywhere (so brand-new roles aren't hidden).
+      if (rolesStaffedAnywhere.has(r.id)) return rolesStaffedHere.has(r.id);
+      return true;
+    });
+  }, [roles, selectedLocation, shiftRoleIds, planWindows, rolesStaffedHere, rolesStaffedAnywhere]);
+
+  // Role filter for the grid — hide roles you don't schedule at this location.
+  // Saved per location (localStorage) so the curated view sticks between visits.
+  const [roleFilter, setRoleFilter] = useState([]); // role ids to SHOW; [] = all
+  const [roleFilterSearch, setRoleFilterSearch] = useState('');
+  useEffect(() => {
+    try { setRoleFilter(JSON.parse(localStorage.getItem(`tch-schedule-roles-${selectedLocation}`) || '[]') || []); }
+    catch { setRoleFilter([]); }
+  }, [selectedLocation]);
+  const saveRoleFilter = (ids) => {
+    setRoleFilter(ids);
+    try { localStorage.setItem(`tch-schedule-roles-${selectedLocation}`, JSON.stringify(ids)); } catch { /* ignore */ }
+  };
+  const toggleRoleFilter = (id) =>
+    saveRoleFilter(roleFilter.includes(id) ? roleFilter.filter(r => r !== id) : [...roleFilter, id]);
+  // roles actually used here (have a shift or a par target) — the "In use" preset
+  const rolesInUse = useMemo(() => {
+    const withShift = new Set(shiftRoleIds);
+    const withPar = new Set(planWindows.map(w => w.roleId));
+    return visibleRoles.filter(r => withShift.has(r.id) || withPar.has(r.id)).map(r => r.id);
+  }, [visibleRoles, shiftRoleIds, planWindows]);
+  const shownRoles = roleFilter.length ? visibleRoles.filter(r => roleFilter.includes(r.id)) : visibleRoles;
 
   const pushUndo = useCallback((entry) => {
     setUndoStack(prev => [...prev.slice(-49), entry]);
@@ -863,6 +920,60 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
         />
         <WeekSelector weekStart={weekStart} setWeekStart={setWeekStart} spanDays={spanDays} />
         <ViewDropdown value={viewKey} onChange={setViewKey} />
+
+        <Popover onOpenChange={(o) => { if (!o) setRoleFilterSearch(''); }}>
+          <PopoverTrigger asChild>
+            <Button size="sm" variant="outline" className="gap-1.5 h-9" title="Show or hide roles in the grid (saved per location)">
+              <Filter className="w-4 h-4" /> Roles
+              {roleFilter.length > 0 && (
+                <span className="text-[10px] bg-primary text-primary-foreground rounded-full px-1.5 leading-tight">{roleFilter.length}</span>
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-72 p-0">
+            <div className="p-2 border-b border-border">
+              <div className="flex items-center gap-1.5 h-8 px-2 rounded-md border border-input bg-transparent">
+                <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                <input
+                  className="bg-transparent outline-none flex-1 text-sm placeholder:text-muted-foreground"
+                  placeholder="Search roles…"
+                  value={roleFilterSearch}
+                  onChange={(e) => setRoleFilterSearch(e.target.value)}
+                />
+              </div>
+              <div className="flex items-center gap-1.5 mt-2 text-xs">
+                <button type="button" className="px-2 py-0.5 rounded bg-muted hover:bg-muted/70" onClick={() => saveRoleFilter(rolesInUse)}>In use ({rolesInUse.length})</button>
+                <button type="button" className="px-2 py-0.5 rounded bg-muted hover:bg-muted/70" onClick={() => saveRoleFilter(visibleRoles.map(r => r.id))}>All</button>
+                <button type="button" className="px-2 py-0.5 rounded bg-muted hover:bg-muted/70" onClick={() => saveRoleFilter([])}>Clear</button>
+                <span className="ml-auto text-muted-foreground">{roleFilter.length ? `${roleFilter.length} shown` : 'all shown'}</span>
+              </div>
+            </div>
+            <div className="max-h-[50vh] overflow-y-auto p-1.5 space-y-0.5">
+              {visibleRoles
+                .filter(r => r.name.toLowerCase().includes(roleFilterSearch.toLowerCase()))
+                .map(r => {
+                  const on = roleFilter.length === 0 || roleFilter.includes(r.id);
+                  return (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => toggleRoleFilter(r.id)}
+                      className={cn('w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-muted transition-colors text-left')}
+                    >
+                      <span className={cn('w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0', roleFilter.includes(r.id) ? 'bg-primary border-primary' : 'border-input')}>
+                        {roleFilter.includes(r.id) && <Check className="w-2.5 h-2.5 text-primary-foreground" />}
+                      </span>
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: r.color || '#6366f1' }} />
+                      <span className={cn('truncate', !on && 'text-muted-foreground')}>{r.name}</span>
+                    </button>
+                  );
+                })}
+            </div>
+            <div className="border-t border-border px-2.5 py-1.5 text-[11px] text-muted-foreground">
+              Saved for {selectedLocation && (locations.find(l => l.id === selectedLocation)?.name) || 'this location'}. Empty = show all.
+            </div>
+          </PopoverContent>
+        </Popover>
         {locParPlans.length > 0 && (
           <div className="flex items-center gap-1.5" title="Staffing plan to check coverage against">
             <Target className="w-3.5 h-3.5 text-muted-foreground" />
@@ -958,7 +1069,7 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
           <DayTimeline
             date={weekStart}
             shifts={shifts}
-            roles={visibleRoles}
+            roles={shownRoles}
             teamMembers={teamMembers}
             dayStartHour={dayStartHour}
             onShiftClick={(shift) => setShiftModal({ open: true, shift })}
@@ -967,7 +1078,7 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
           <DayViewSummary
             date={weekStart}
             shifts={shifts}
-            roles={visibleRoles}
+            roles={shownRoles}
             teamMembers={teamMembers}
             dayStartHour={dayStartHour}
             parWindows={planWindows}
@@ -979,7 +1090,7 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
         <ScheduleGrid
           weekStart={weekStart}
           shifts={shifts}
-          roles={visibleRoles}
+          roles={shownRoles}
           teamMembers={teamMembers}
           locations={locations}
           viewMode={viewMode}

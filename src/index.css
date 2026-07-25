@@ -128,4 +128,11 @@
     user-select: none;
     -webkit-user-select: none;
   }
+
+  /* Native <select> option lists render in an OS popup that ignores Tailwind
+     theme tokens. In dark mode the popup stayed white while option text kept the
+     light theme foreground, washing out. Declaring color-scheme lets the browser
+     paint that popup (and the dropdown arrow) to match the active theme. */
+  select { color-scheme: light; }
+  .dark select { color-scheme: dark; }
 }

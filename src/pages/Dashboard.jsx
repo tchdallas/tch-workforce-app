@@ -16,6 +16,7 @@ import PageHeader from '@/components/common/PageHeader';
 import StatCard from '@/components/common/StatCard';
 import ActionItems from '@/components/dashboard/ActionItems';
 import QuickActions from '@/components/dashboard/QuickActions';
+import MyAttendanceCard from '@/components/dashboard/MyAttendanceCard';
 import AnnouncementBanner from '@/components/common/AnnouncementBanner';
 import LocationSelector from '@/components/common/LocationSelector';
 import { useLocationFilter } from '@/hooks/useLocationFilter';
@@ -116,6 +117,7 @@ export default function Dashboard() {
 
         <div className="grid lg:grid-cols-2 gap-4">
           <QuickActions isManager={isManager} isAdmin={isAdmin} memberId={member?.id} />
+          <MyAttendanceCard />
 
           <Card>
             <CardHeader className="pb-3">
@@ -186,6 +188,9 @@ export default function Dashboard() {
       <div className="grid lg:grid-cols-2 gap-4">
         {/* Quick Actions — user-customizable */}
         <QuickActions isManager={isManager} isAdmin={isAdmin} memberId={member?.id} />
+
+        {/* Managers/admins are team members too — their own attendance standing */}
+        <MyAttendanceCard />
 
         {/* Unpublished Schedules */}
         <Card>

@@ -49,7 +49,7 @@ const fmtDay = (d) => (d ? format(parseISO(d), 'MMM d, yyyy') : '');
 
 export default function Attendance() {
   const queryClient = useQueryClient();
-  const { member, isAdmin, assignedLocationIds } = useCurrentMember();
+  const { member, isAdmin, assignedLocationIds, outranks } = useCurrentMember();
   const { data: locations = [] } = useLocations();
   const { data: teamMembers = [] } = useTeamMembers();
 
@@ -136,6 +136,11 @@ export default function Attendance() {
     const tm = teamMembers.find(t => t.id === id);
     return tm ? `${tm.preferredName || tm.firstName} ${tm.lastName}` : 'Unknown';
   };
+
+  // Hierarchy: you can only issue/manage points for members BELOW your rank.
+  // The DB enforces this too — this just keeps the UI honest (no dead buttons).
+  const canDiscipline = (id) => outranks(teamMembers.find(t => t.id === id)?.permissionLevel);
+  const disciplinableRoster = roster.filter(r => canDiscipline(r.team_member_id));
 
   const locAbbrev = (id) => {
     const l = locations.find(x => x.id === id);
@@ -279,6 +284,7 @@ export default function Attendance() {
           rosterRow={detailMember}
           types={types}
           isAdmin={isAdmin}
+          canManage={canDiscipline(detailMember.team_member_id)}
           onClose={() => setDetailMember(null)}
           onChanged={invalidate}
         />
@@ -286,7 +292,7 @@ export default function Attendance() {
 
       {issueOpen && (
         <IssueDialog
-          roster={roster}
+          roster={disciplinableRoster}
           types={types}
           teamMembers={teamMembers}
           onClose={() => setIssueOpen(false)}
@@ -297,7 +303,7 @@ export default function Attendance() {
   );
 }
 
-function MemberDetailDialog({ rosterRow, types, isAdmin, onClose, onChanged }) {
+function MemberDetailDialog({ rosterRow, types, isAdmin, canManage = true, onClose, onChanged }) {
   const { data: history = [] } = useQuery({
     queryKey: ['attendance-history', rosterRow.team_member_id],
     queryFn: () => base44.entities.AttendanceInfraction.filter({ teamMemberId: rosterRow.team_member_id }),
@@ -375,7 +381,7 @@ function MemberDetailDialog({ rosterRow, types, isAdmin, onClose, onChanged }) {
                 </div>
               </div>
 
-              {isAdmin && inf.status === 'issued' && (
+              {isAdmin && canManage && inf.status === 'issued' && (
                 excusing === inf.id ? (
                   <div className="mt-2 space-y-2">
                     <Textarea placeholder="Reason for excusing (required — e.g. verified doctor's note)"

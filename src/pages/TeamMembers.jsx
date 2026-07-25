@@ -100,7 +100,7 @@ export default function TeamMembers() {
   const [sortBy, setSortBy] = useState('name'); // name | status | location
   const [sortDir, setSortDir] = useState('asc');
   const showArchivedRows = statusFilter.includes('archived');
-  const { isAdmin } = useCurrentMember();
+  const { isAdmin, scopeLocations } = useCurrentMember();
 
   const toggleIn = (setter) => (val) =>
     setter(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
@@ -388,7 +388,7 @@ export default function TeamMembers() {
               />
               <FilterGroup
                 title="Location"
-                options={(locations || []).map(l => ({ value: l.id, label: l.name }))}
+                options={scopeLocations(locations || []).map(l => ({ value: l.id, label: l.name }))}
                 selected={locationFilter}
                 onToggle={toggleIn(setLocationFilter)}
               />
