@@ -366,6 +366,7 @@ export default function TeamMemberModal({ open, onClose, member, locations, role
                 <AvailabilityForm memberId={member.id} manager />
               </TabsContent>
             )}
+
             {isEdit && (
               <TabsContent value="file" className="mt-0">
                 {/* live journal + discipline record — saves itself, independent of the form's Update button */}
