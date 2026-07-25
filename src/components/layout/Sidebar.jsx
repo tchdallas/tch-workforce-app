@@ -4,10 +4,11 @@ import { ChevronLeft, ChevronRight, ChevronDown, LogOut, Star } from 'lucide-rea
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useCurrentMember } from '@/hooks/useCurrentMember';
+import { useUiPrefs } from '@/hooks/useUiPrefs';
 import { useAuth } from '@/lib/AuthContext';
 import {
   visibleGroupsFor, footerNavItems, isPathActive, activeGroupLabel,
-  loadOpenGroups, saveOpenGroups, loadFavorites, saveFavorites, findNavItem,
+  loadOpenGroup, saveOpenGroup, findNavItem,
 } from './navConfig';
 
 // hex -> rgba, for the faint colored rail on inactive items
@@ -23,16 +24,13 @@ export default function Sidebar({ collapsed, setCollapsed }) {
   const { logout } = useAuth();
 
   const groups = visibleGroupsFor({ isManager, isAdmin });
-  const [openGroups, setOpenGroups] = useState(loadOpenGroups);
 
   // Favorites — per member, pinned to a section at the very top.
-  const [favorites, setFavorites] = useState([]);
-  React.useEffect(() => { setFavorites(loadFavorites(member?.id)); }, [member?.id]);
-  const toggleFavorite = (path) => setFavorites((prev) => {
-    const next = prev.includes(path) ? prev.filter((p) => p !== path) : [...prev, path];
-    saveFavorites(member?.id, next);
-    return next;
-  });
+  // Stored in the DB (useUiPrefs) so they follow the person across devices.
+  const { favorites, setFavorites } = useUiPrefs();
+  const toggleFavorite = (path) => setFavorites(
+    favorites.includes(path) ? favorites.filter((p) => p !== path) : [...favorites, path]
+  );
 
   // Only pin favorites the user can actually reach.
   const visiblePaths = new Set();
@@ -42,15 +40,19 @@ export default function Sidebar({ collapsed, setCollapsed }) {
     .map(findNavItem)
     .filter((x) => x && visiblePaths.has(x.item.path));
 
+  // Accordion: at most one group open. Follows navigation — landing on a page
+  // opens that page's group (and closes the rest).
   const activeGroup = activeGroupLabel(location.pathname);
-  const isOpen = (label) => label === activeGroup || openGroups[label] !== false;
+  const [openLabel, setOpenLabel] = useState(() => loadOpenGroup() ?? activeGroup);
+  React.useEffect(() => {
+    if (activeGroup) { setOpenLabel(activeGroup); saveOpenGroup(activeGroup); }
+  }, [activeGroup]);
 
+  const isOpen = (label) => label === openLabel;
   const toggleGroup = (label) => {
-    setOpenGroups((prev) => {
-      const next = { ...prev, [label]: prev[label] === false ? true : false };
-      saveOpenGroups(next);
-      return next;
-    });
+    const next = openLabel === label ? null : label;
+    setOpenLabel(next);
+    saveOpenGroup(next);
   };
 
   const NavLink = ({ item, color, keyPrefix = '' }) => {

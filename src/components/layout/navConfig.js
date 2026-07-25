@@ -103,40 +103,25 @@ export function activeGroupLabel(pathname) {
 export const isPathActive = (pathname, path) =>
   pathname === path || (path !== '/' && pathname.startsWith(path));
 
-const STORAGE_KEY = 'tch-nav-open-groups';
+// Accordion state: exactly ONE group open at a time (or none). Stored as the
+// open group's label, per device — which device you're on is exactly the kind
+// of thing this should remember. (Favorites/quick actions are cross-device
+// and live in the DB via useUiPrefs.)
+const OPEN_GROUP_KEY = 'tch-nav-open-group';
 
-export function loadOpenGroups() {
+export function loadOpenGroup() {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') || {};
+    const v = localStorage.getItem(OPEN_GROUP_KEY);
+    return v === null || v === '' ? null : v;
   } catch {
-    return {};
+    return null;
   }
 }
 
-export function saveOpenGroups(state) {
+export function saveOpenGroup(label) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(OPEN_GROUP_KEY, label || '');
   } catch {
     // ignore quota/availability errors — collapse state is non-critical
-  }
-}
-
-// Favorites — per member, an ordered list of pinned nav paths.
-const favKey = (memberId) => `tch-nav-favorites-${memberId || 'anon'}`;
-
-export function loadFavorites(memberId) {
-  try {
-    const v = JSON.parse(localStorage.getItem(favKey(memberId)) || '[]');
-    return Array.isArray(v) ? v : [];
-  } catch {
-    return [];
-  }
-}
-
-export function saveFavorites(memberId, list) {
-  try {
-    localStorage.setItem(favKey(memberId), JSON.stringify(list));
-  } catch {
-    // ignore — favorites are a convenience, non-critical
   }
 }

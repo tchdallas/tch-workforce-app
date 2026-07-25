@@ -149,6 +149,8 @@ const ENTITIES = {
   DownPayPeriod: { table: 'down_pay_periods' },
   DownDispute: { table: 'down_disputes' },
   BugReport: { table: 'bug_reports' },
+  // per-user cosmetic prefs (nav favorites, quick actions) — cross-device
+  UserUiPref: { table: 'user_ui_prefs' },
   // blindWrites: creators of these rows often can't SELECT them back under RLS
   // (a notification belongs to its recipient; audit reads are manager+), so
   // writes skip the RETURNING clause and reads of the result aren't attempted

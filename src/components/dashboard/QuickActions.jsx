@@ -5,29 +5,13 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Settings2, ArrowUp, ArrowDown, X, Plus, RotateCcw } from 'lucide-react';
 import { quickActionCatalog, defaultQuickActions } from '@/components/layout/navConfig';
-
-const keyFor = (id) => `tch-quick-actions-${id || 'anon'}`;
-
-function loadSelection(id) {
-  try {
-    const v = JSON.parse(localStorage.getItem(keyFor(id)) || 'null');
-    return Array.isArray(v) ? v : null;
-  } catch {
-    return null;
-  }
-}
-function saveSelection(id, paths) {
-  try {
-    localStorage.setItem(keyFor(id), JSON.stringify(paths));
-  } catch {
-    // ignore — a personalized dashboard is non-critical
-  }
-}
+import { useUiPrefs } from '@/hooks/useUiPrefs';
 
 // Each user chooses which shortcut buttons appear here and in what order; the
-// choice is remembered per person on this device. The catalog is drawn from the
-// nav config so it's always permission-correct.
-export default function QuickActions({ isManager, isAdmin, memberId }) {
+// choice is stored per person in the DB (useUiPrefs), so it follows them to
+// any device. The catalog is drawn from the nav config so it's always
+// permission-correct.
+export default function QuickActions({ isManager, isAdmin }) {
   const catalog = useMemo(() => quickActionCatalog({ isManager, isAdmin }), [isManager, isAdmin]);
   const byPath = useMemo(() => new Map(catalog.map((i) => [i.path, i])), [catalog]);
   const defaults = useMemo(
@@ -35,12 +19,13 @@ export default function QuickActions({ isManager, isAdmin, memberId }) {
     [isManager, byPath]
   );
 
-  const [selected, setSelected] = useState(() => (loadSelection(memberId) || defaults).filter((p) => byPath.has(p)));
+  const { quickActions, setQuickActions } = useUiPrefs();
+  const selected = (quickActions || defaults).filter((p) => byPath.has(p));
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(selected);
 
   const openEditor = () => { setDraft(selected); setEditing(true); };
-  const commit = () => { setSelected(draft); saveSelection(memberId, draft); setEditing(false); };
+  const commit = () => { setQuickActions(draft); setEditing(false); };
 
   const move = (i, dir) => setDraft((d) => {
     const n = [...d];
