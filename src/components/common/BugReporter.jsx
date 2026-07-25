@@ -5,7 +5,7 @@ import { base44 } from '@/api/base44Client';
 import { supabase } from '@/api/supabase';
 import { useCurrentMember } from '@/hooks/useCurrentMember';
 import { getRecentErrors } from '@/lib/errorLog';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -187,6 +187,7 @@ export default function BugReporter() {
         <DialogContent className="max-w-lg" data-bug-ignore="true">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><copy.icon className="w-4 h-4" /> {copy.title}</DialogTitle>
+            <DialogDescription>Your report goes to the team with a screenshot and technical details attached.</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3 max-h-[65vh] overflow-y-auto pr-1">

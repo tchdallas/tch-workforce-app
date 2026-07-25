@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
 import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
@@ -179,6 +179,10 @@ function SentRow({ a }) {
 }
 
 function ComposeDialog({ open, onClose, isCorp, onPosted }) {
+  // scopeLocations must come from the hook HERE — referencing the parent's copy
+  // crashed this dialog for every non-corporate manager (audience defaults to
+  // 'location' for them, which rendered the scoped-locations list immediately)
+  const { scopeLocations } = useCurrentMember();
   const { data: locations = [] } = useLocations();
   const { data: roles = [] } = useRoles();
   const [title, setTitle] = useState('');
@@ -214,7 +218,10 @@ function ComposeDialog({ open, onClose, isCorp, onPosted }) {
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle className="text-base flex items-center gap-2"><Megaphone className="w-4 h-4" /> New announcement</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle className="text-base flex items-center gap-2"><Megaphone className="w-4 h-4" /> New announcement</DialogTitle>
+          <DialogDescription>Broadcast a message to your team, optionally requiring read confirmation.</DialogDescription>
+        </DialogHeader>
         <div className="space-y-3">
           <div><Label className="text-xs">Title</Label><Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Short headline" /></div>
           <div><Label className="text-xs">Message</Label><Textarea value={body} onChange={e => setBody(e.target.value)} rows={4} placeholder="What do you want the team to know?" /></div>

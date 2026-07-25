@@ -6,6 +6,7 @@ import TopBar from './TopBar';
 import MobileMenu from './MobileMenu';
 import { ThemeProvider } from '@/lib/ThemeContext';
 import PageTransition from '@/components/common/PageTransition';
+import PageErrorBoundary from '@/components/common/PageErrorBoundary';
 import BugReporter from '@/components/common/BugReporter';
 import TutorialModal from '@/components/common/TutorialModal';
 import { useLocations, useRoles, useTeamMembers } from '@/lib/useAppData';
@@ -82,7 +83,10 @@ export default function AppLayout() {
             className="flex-1 p-4 lg:p-6 pb-20 lg:pb-6 overflow-x-hidden overflow-y-auto"
             style={{ overscrollBehaviorY: 'none', minHeight: 0, WebkitOverflowScrolling: 'touch' }}
           >
-            <PageTransition><Outlet /></PageTransition>
+            {/* keyed by path: navigating away from a crashed page resets the boundary */}
+            <PageErrorBoundary key={location.pathname}>
+              <PageTransition><Outlet /></PageTransition>
+            </PageErrorBoundary>
           </main>
         </div>
 
