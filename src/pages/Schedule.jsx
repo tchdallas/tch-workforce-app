@@ -20,7 +20,14 @@ import DayViewSummary from '@/components/schedule/DayViewSummary';
 import DayTimeline from '@/components/schedule/DayTimeline';
 import ImportTemplateModal from '@/components/schedule/ImportTemplateModal';
 import TeamMemberModal from '@/components/team/TeamMemberModal';
-import { useLocations, useRoles, useTeamMembers, businessDayStartHour } from '@/lib/useAppData';
+import { useLocations, useRoles, useTeamMembers, usePars, useParTemplates, useAllAvailability, businessDayStartHour } from '@/lib/useAppData';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Target } from 'lucide-react';
+import { roleDayCoverage } from '@/lib/parCoverage';
 import { rolesAvailableAtLocation } from '@/lib/roleLocations';
 import { toast } from 'sonner';
 
@@ -75,6 +82,30 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
     queryFn: () => base44.entities.AppSetting.list(),
     placeholderData: [],
   });
+  // Par staffing plans for coverage comparison (pick which plan to build against)
+  const { data: parTemplates = [] } = useParTemplates();
+  const { data: allParWindows = [] } = usePars();
+  const [parPlanId, setParPlanId] = useState('');
+  const locParPlans = useMemo(
+    () => parTemplates.filter(t => t.locationId === selectedLocation).sort((a, b) => a.name.localeCompare(b.name)),
+    [parTemplates, selectedLocation]
+  );
+  useEffect(() => {
+    if (!locParPlans.some(t => t.id === parPlanId)) {
+      const def = locParPlans.find(t => t.isDefault) || locParPlans[0];
+      setParPlanId(def ? def.id : '');
+    }
+  }, [locParPlans, parPlanId]);
+  const planWindows = useMemo(() => allParWindows.filter(p => p.templateId === parPlanId), [allParWindows, parPlanId]);
+  const parPlanName = locParPlans.find(t => t.id === parPlanId)?.name;
+
+  // recurring availability, mapped per member, for the subtle grid cue
+  const { data: availabilityAll = [] } = useAllAvailability();
+  const availabilityByMember = useMemo(() => {
+    const m = new Map();
+    availabilityAll.forEach(a => { if (!m.has(a.teamMemberId)) m.set(a.teamMemberId, []); m.get(a.teamMemberId).push(a); });
+    return m;
+  }, [availabilityAll]);
 
   // 24/7: the query window follows the business-day boundary so an overnight
   // week (e.g. day starts 4 AM) includes Sat 1 AM shifts in the prior week
@@ -337,6 +368,28 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
       toast.success(`${count ?? 0} shift${count !== 1 ? 's' : ''} published`);
     },
   });
+
+  // Understaffed par windows across the visible week (for the publish heads-up)
+  const [publishConfirm, setPublishConfirm] = useState(null); // { ids, shortfalls }
+  const weekShortfalls = useCallback(() => {
+    if (!planWindows.length) return [];
+    const out = [];
+    const days = Array.from({ length: spanDays }, (_, i) => addDays(weekStart, i));
+    roles.forEach(role => days.forEach(day => {
+      roleDayCoverage(planWindows, shifts, role.id, day, dayStartHour, selectedLocation)
+        .filter(c => c.status === 'short')
+        .forEach(c => out.push({ day, roleName: role.name, from: c.start, to: c.end, min: c.min, required: c.required }));
+    }));
+    return out;
+  }, [planWindows, spanDays, weekStart, roles, shifts, dayStartHour, selectedLocation]);
+
+  // publish, but pause on a par shortfall so the scheduler can confirm
+  const guardedPublish = (ids) => {
+    if (!ids.length) return;
+    const shortfalls = weekShortfalls();
+    if (shortfalls.length) setPublishConfirm({ ids, shortfalls });
+    else publishMutation.mutate(ids);
+  };
 
   const handleSave = (data) => {
     // Check for overlapping shifts for the same team member
@@ -744,12 +797,12 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
           filteredDraftCount={filteredDraftCount}
           selectedDraftCount={selectedDraftCount}
           isPending={publishMutation.isPending}
-          onPublishAll={() => publishMutation.mutate(shifts.filter(s => s.status === 'draft').map(s => s.id))}
-          onPublishFiltered={() => publishMutation.mutate([...filteredShiftIds].filter(id => shifts.find(s => s.id === id && s.status === 'draft')))}
+          onPublishAll={() => guardedPublish(shifts.filter(s => s.status === 'draft').map(s => s.id))}
+          onPublishFiltered={() => guardedPublish([...filteredShiftIds].filter(id => shifts.find(s => s.id === id && s.status === 'draft')))}
           onPublishSelected={() => {
             const ids = [...selectedShiftIds];
             if (selectedShiftId && !selectedShiftIds.has(selectedShiftId)) ids.push(selectedShiftId);
-            publishMutation.mutate(ids);
+            guardedPublish(ids.filter(id => shifts.find(s => s.id === id && s.status === 'draft')));
           }}
         />
         <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setImportTemplateModal(true)}>
@@ -774,6 +827,19 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
         />
         <WeekSelector weekStart={weekStart} setWeekStart={setWeekStart} spanDays={spanDays} />
         <ViewDropdown value={viewKey} onChange={setViewKey} />
+        {locParPlans.length > 0 && (
+          <div className="flex items-center gap-1.5" title="Staffing plan to check coverage against">
+            <Target className="w-3.5 h-3.5 text-muted-foreground" />
+            <Select value={parPlanId} onValueChange={setParPlanId}>
+              <SelectTrigger className="h-9 w-[170px] text-xs"><SelectValue placeholder="Par plan" /></SelectTrigger>
+              <SelectContent>
+                {locParPlans.map(t => (
+                  <SelectItem key={t.id} value={t.id}>{t.name}{t.isDefault ? ' (default)' : ''}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         <label
           className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none"
           onClick={(e) => e.stopPropagation()}
@@ -868,6 +934,9 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
             roles={visibleRoles}
             teamMembers={teamMembers}
             dayStartHour={dayStartHour}
+            parWindows={planWindows}
+            planName={parPlanName}
+            locationId={selectedLocation}
             onShiftClick={(shift) => setShiftModal({ open: true, shift })}
           />
         ) : (
@@ -879,6 +948,8 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
           locations={locations}
           viewMode={viewMode}
           spanDays={spanDays}
+          parWindows={planWindows}
+          availabilityByMember={availabilityByMember}
           onShiftClick={(shift) => setShiftModal({ open: true, shift })}
           onAddShift={handleAddShift}
           selectedLocation={selectedLocation}
@@ -918,6 +989,32 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
         )}
       </div>
 
+      <AlertDialog open={!!publishConfirm} onOpenChange={(o) => !o && setPublishConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Publish with understaffed windows?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This week has {publishConfirm?.shortfalls.length} par window{publishConfirm?.shortfalls.length !== 1 ? 's' : ''} below target{parPlanName ? ` for "${parPlanName}"` : ''}. You can still publish.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="max-h-52 overflow-y-auto text-xs space-y-1">
+            {publishConfirm?.shortfalls.slice(0, 12).map((s, i) => (
+              <div key={i} className="flex justify-between gap-2 px-2 py-1 rounded bg-red-50 dark:bg-red-950/20">
+                <span>{format(s.day, 'EEE')} · {s.roleName}</span>
+                <span className="tabular-nums text-red-600 dark:text-red-400">{format(s.from, 'h:mm a')}–{format(s.to, 'h:mm a')} · {s.min}/{s.required}</span>
+              </div>
+            ))}
+            {publishConfirm && publishConfirm.shortfalls.length > 12 && (
+              <p className="text-muted-foreground px-2">+{publishConfirm.shortfalls.length - 12} more…</p>
+            )}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { publishMutation.mutate(publishConfirm.ids); setPublishConfirm(null); }}>Publish anyway</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <ShiftModal
         open={shiftModal.open}
         onClose={() => setShiftModal({ open: false, shift: null })}
@@ -925,6 +1022,7 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
         locations={locations}
         roles={visibleRoles}
         teamMembers={teamMembers}
+        shifts={shifts}
         onSave={handleSave}
         onDelete={(id) => deleteShift.mutate(id)}
       />

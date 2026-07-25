@@ -136,6 +136,10 @@ const ENTITIES = {
   // void transitions go through DB functions so the state machine holds
   JournalEntry: { table: 'journal_entries' },
   DisciplineDocument: { table: 'discipline_documents' },
+  // par levels: named location-wide staffing-plan templates; each holds
+  // target-headcount windows per role/gaming-day/time
+  ParTemplate: { table: 'par_templates' },
+  ParLevel: { table: 'par_levels' },
   // blindWrites: creators of these rows often can't SELECT them back under RLS
   // (a notification belongs to its recipient; audit reads are manager+), so
   // writes skip the RETURNING clause and reads of the result aren't attempted
