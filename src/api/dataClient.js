@@ -149,6 +149,21 @@ const ENTITIES = {
   DownPayPeriod: { table: 'down_pay_periods' },
   DownDispute: { table: 'down_disputes' },
   BugReport: { table: 'bug_reports' },
+  // policies & procedures: the rulebook. Audience is roles AND clubs (both
+  // required at publish); publishing and acknowledgment snapshots go through
+  // publish_policy / publish_policy_update so the audience math stays server-side
+  Policy: {
+    table: 'policies',
+    junctions: [
+      { prop: 'roleIds', table: 'policy_roles', fk: 'policy_id', other: 'role_id' },
+      { prop: 'locationIds', table: 'policy_locations', fk: 'policy_id', other: 'location_id' },
+    ],
+  },
+  PolicyDocument: { table: 'policy_documents' },
+  PolicyUpdate: { table: 'policy_updates' },
+  PolicyComment: { table: 'policy_comments' },
+  // (the two *_recipients tables have composite PKs and no id column, so they
+  // can't ride this id-keyed adapter — src/lib/policies.js talks to them directly)
   // per-user cosmetic prefs (nav favorites, quick actions) — cross-device
   UserUiPref: { table: 'user_ui_prefs' },
   // blindWrites: creators of these rows often can't SELECT them back under RLS

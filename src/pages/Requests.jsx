@@ -14,6 +14,7 @@ import TeamMemberCombobox from '@/components/common/TeamMemberCombobox';
 import { useTeamMembers, useRoles, useLocations } from '@/lib/useAppData';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import { invalidateNavBadges } from '@/hooks/useNavBadges';
 import usePullToRefresh from '@/hooks/usePullToRefresh';
 import PullToRefreshIndicator from '@/components/common/PullToRefreshIndicator';
 
@@ -53,25 +54,25 @@ export default function Requests() {
   });
 
   const { pullDistance, refreshing } = usePullToRefresh(async () => {
-    await queryClient.invalidateQueries({ queryKey: ['all-timeoff'] });
-    await queryClient.invalidateQueries({ queryKey: ['all-trades'] });
-    await queryClient.invalidateQueries({ queryKey: ['all-giveaways'] });
-    await queryClient.invalidateQueries({ queryKey: ['all-claims'] });
+    await queryClient.invalidateQueries({ queryKey: ['all-timeoff'] }); invalidateNavBadges(queryClient);
+    await queryClient.invalidateQueries({ queryKey: ['all-trades'] }); invalidateNavBadges(queryClient);
+    await queryClient.invalidateQueries({ queryKey: ['all-giveaways'] }); invalidateNavBadges(queryClient);
+    await queryClient.invalidateQueries({ queryKey: ['all-claims'] }); invalidateNavBadges(queryClient);
   });
 
   const approveTimeOff = useMutation({
     mutationFn: ({ id, status }) => base44.entities.TimeOffRequest.update(id, { status, reviewedAt: new Date().toISOString() }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['all-timeoff'] }); toast.success('Updated'); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['all-timeoff'] }); invalidateNavBadges(queryClient); toast.success('Updated'); },
   });
 
   const setTimeOffPayType = useMutation({
     mutationFn: ({ id, payType }) => base44.entities.TimeOffRequest.update(id, { payType }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['all-timeoff'] }); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['all-timeoff'] }); invalidateNavBadges(queryClient); },
   });
 
   const approveTrade = useMutation({
     mutationFn: ({ id, status }) => base44.entities.ShiftTradeRequest.update(id, { status, reviewedAt: new Date().toISOString() }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['all-trades'] }); toast.success('Updated'); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['all-trades'] }); invalidateNavBadges(queryClient); toast.success('Updated'); },
   });
 
   const approveGiveaway = useMutation({
@@ -123,7 +124,7 @@ export default function Requests() {
       }
     },
     onSuccess: () => { 
-      queryClient.invalidateQueries({ queryKey: ['all-giveaways'] });
+      queryClient.invalidateQueries({ queryKey: ['all-giveaways'] }); invalidateNavBadges(queryClient);
       queryClient.invalidateQueries({ queryKey: ['shifts'] });
       toast.success('Updated'); 
     },
@@ -144,7 +145,7 @@ export default function Requests() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['all-giveaways'] });
+      queryClient.invalidateQueries({ queryKey: ['all-giveaways'] }); invalidateNavBadges(queryClient);
       toast.success('Giveaway cancelled');
     },
     onError: (e) => toast.error(e.message || 'Could not cancel'),
@@ -193,7 +194,7 @@ export default function Requests() {
       ]);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['all-giveaways'] });
+      queryClient.invalidateQueries({ queryKey: ['all-giveaways'] }); invalidateNavBadges(queryClient);
       queryClient.invalidateQueries({ queryKey: ['shifts'] });
       setAssigningGiveaway(null);
       toast.success('Shift assigned');
@@ -226,7 +227,7 @@ export default function Requests() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['all-claims'] });
+      queryClient.invalidateQueries({ queryKey: ['all-claims'] }); invalidateNavBadges(queryClient);
       queryClient.invalidateQueries({ queryKey: ['shifts'] });
       queryClient.invalidateQueries({ queryKey: ['open-shifts'] });
       toast.success('Updated');

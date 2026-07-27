@@ -129,24 +129,64 @@ function MobileSelectRoot({ value, onValueChange, children, defaultValue, open, 
 
   const displayLabel = items.find(i => i.value === value)?.label
 
+  // The fake trigger used to hardcode its own markup, silently discarding the
+  // caller's SelectTrigger className AND children — so any custom trigger (an
+  // icon, a two-line label, a different colour) rendered correctly on desktop
+  // and reverted to a plain grey box on a phone, with no error to notice.
+  // Now the caller's className is merged over the defaults and their children
+  // are rendered, with <SelectValue /> swapped for the selected label wherever
+  // it appears in the tree.
+  const isValueNode = (c) =>
+    c?.type === SelectValue || c?.type?.displayName === SelectValue.displayName
+
+  const placeholderOf = (nodes) => {
+    let found
+    React.Children.forEach(nodes, (c) => {
+      if (found || !React.isValidElement(c)) return
+      if (isValueNode(c)) found = c.props.placeholder
+      else if (c.props?.children) found = placeholderOf(c.props.children)
+    })
+    return found
+  }
+
+  const resolveTrigger = (nodes) => React.Children.map(nodes, (child) => {
+    if (!React.isValidElement(child)) return child
+    if (isValueNode(child)) {
+      return displayLabel ?? (
+        <span className="text-muted-foreground">{child.props.placeholder || 'Select...'}</span>
+      )
+    }
+    if (child.props?.children) {
+      return React.cloneElement(child, {}, resolveTrigger(child.props.children))
+    }
+    return child
+  })
+
   return (
     <>
       {/* Render a fake trigger that opens the Drawer */}
       <button
         type="button"
         onClick={() => setDrawerOpen(true)}
-        className="flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+        aria-label={triggerEl?.props?.['aria-label']}
+        className={cn(
+          "flex h-9 items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+          triggerEl?.props?.className,
+          // w-full last, so it beats the caller's width. Desktop widths like
+          // w-32 / w-[180px] are chosen for a popover next to other controls;
+          // this is a full-width sheet trigger, and letting those through would
+          // shrink eight existing screens as a side effect of passing colours.
+          "w-full"
+        )}
         {...props}
       >
-        <span className={cn("line-clamp-1", !displayLabel && "text-muted-foreground")}>
-          {/* Find the placeholder from the SelectValue child */}
-          {displayLabel || (() => {
-            const sv = React.Children.toArray(
-              React.Children.toArray(children).find(c => c?.type === SelectTrigger || c?.type?.displayName === SelectTrigger.displayName)?.props?.children
-            ).find(c => c?.type === SelectValue || c?.type?.displayName === SelectValue.displayName)
-            return sv?.props?.placeholder || 'Select...'
-          })()}
-        </span>
+        {triggerEl?.props?.children ? (
+          resolveTrigger(triggerEl.props.children)
+        ) : (
+          <span className={cn("line-clamp-1", !displayLabel && "text-muted-foreground")}>
+            {displayLabel || placeholderOf(children) || 'Select...'}
+          </span>
+        )}
         <ChevronDown className="h-4 w-4 opacity-50 shrink-0" />
       </button>
 

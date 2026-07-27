@@ -10,8 +10,8 @@ import ScheduleGrid from '@/components/schedule/ScheduleGrid';
 import ViewDropdown, { getViewConfig } from '@/components/schedule/ViewDropdown';
 import DayViewSummary from '@/components/schedule/DayViewSummary';
 import DayTimeline from '@/components/schedule/DayTimeline';
-import { useLocations, useRoles, useTeamMembers, businessDayStartHour } from '@/lib/useAppData';
-import { rolesAvailableAtLocation, isRoleAvailableAtLocation, filterRolesByLocationAccess } from '@/lib/roleLocations';
+import { useLocations, useRoles, useTeamMembers, businessDayStartHour, scheduleRoleOrder, sortRolesByOrder } from '@/lib/useAppData';
+import { isRoleAvailableAtLocation, filterRolesByLocationAccess } from '@/lib/roleLocations';
 
 export default function ViewSchedule({ assignedLocationIds = [] }) {
   const [weekStart, setWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 0 }));
@@ -81,14 +81,20 @@ export default function ViewSchedule({ assignedLocationIds = [] }) {
 
   const shiftRoleIds = useMemo(() => shifts.map(s => s.roleId).filter(Boolean), [shifts]);
 
+  // Same club position order the builder uses, so what a member sees matches
+  // what their scheduler built. On "all locations" fall back to their home club.
+  const orderLocation = selectedLocation && selectedLocation !== 'all' ? selectedLocation : myLocationIds[0];
+  const roleOrder = useMemo(() => scheduleRoleOrder(appSettings, orderLocation), [appSettings, orderLocation]);
+
   const visibleRoles = useMemo(() => {
     const keep = new Set(shiftRoleIds);
-    return roles.filter(r => {
+    const avail = roles.filter(r => {
       if (keep.has(r.id)) return true;
       if (selectedLocation && selectedLocation !== 'all') return isRoleAvailableAtLocation(r, selectedLocation);
       return filterRolesByLocationAccess([r], myLocationIds).length > 0;
     });
-  }, [roles, selectedLocation, shiftRoleIds, myLocationIds]);
+    return sortRolesByOrder(avail, roleOrder);
+  }, [roles, selectedLocation, shiftRoleIds, myLocationIds, roleOrder]);
 
   return (
     <div className="max-w-full flex flex-col" style={{ height: 'calc(100dvh - 112px)', minHeight: 0 }}>

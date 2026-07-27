@@ -4,7 +4,8 @@
 import {
   LayoutDashboard, Radio, Calendar, CalendarCheck, LayoutTemplate, HandHelping,
   ClipboardList, AlertTriangle, Clock, Trophy, Users, UserCheck, MessageSquare,
-  Megaphone, BarChart3, Activity, MapPin, Shield, Target, Settings, Bell, User, Bug, MessageSquarePlus,
+  Megaphone, BarChart3, Activity, MapPin, Shield, Target, Settings, Bell, User, MessageSquarePlus,
+  ScrollText,
 } from 'lucide-react';
 
 // Each group carries an accent color so sections are scannable at a glance
@@ -36,6 +37,8 @@ export const navGroups = [
   { label: 'Communication', color: '#0ea5e9', items: [
     { label: 'Messages', icon: MessageSquare, path: '/messages' },
     { label: 'Announcements', icon: Megaphone, path: '/announcements' },
+    // everyone: RLS scopes each policy to the roles + clubs it applies to
+    { label: 'Policies', icon: ScrollText, path: '/policies' },
   ] },
   { label: 'Insights', color: '#f43f5e', items: [
     { label: 'Reports', icon: BarChart3, path: '/reports', managerOnly: true },

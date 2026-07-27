@@ -6,11 +6,13 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { LayoutList } from 'lucide-react';
 import AvailabilityForm from '@/components/profile/AvailabilityForm';
 import MemberFileTab from '@/components/discipline/MemberFileTab';
 import { Switch } from '@/components/ui/switch';
 import { TERMINATION_CATEGORIES, TERMINATION_REASONS } from '@/lib/termination';
 import { useCurrentMember } from '@/hooks/useCurrentMember';
+import PunchReliabilityCard from '@/components/timesheets/PunchReliabilityCard';
 
 const defaultMember = {
   tmNumber: '', firstName: '', lastName: '', preferredName: '', email: '', phone: '',
@@ -23,6 +25,7 @@ const defaultMember = {
 export default function TeamMemberModal({ open, onClose, member, locations, roles, onSave, existingMembers = [] }) {
   const [form, setForm] = useState(defaultMember);
   const [tmNumberError, setTmNumberError] = useState('');
+  const [tab, setTab] = useState('basic');
   const isEdit = !!member?.id;
   const { scopeLocations, outranks } = useCurrentMember();
 
@@ -34,10 +37,24 @@ export default function TeamMemberModal({ open, onClose, member, locations, role
   const memberLocationIds = new Set([form.homeLocationId, ...(form.assignedLocationIds || [])].filter(Boolean));
   const selectableLocations = activeLocations.filter(l => scopedLocationIds.has(l.id) || memberLocationIds.has(l.id));
 
+  // The six sections of this form. One list drives both the phone picker and
+  // the desktop tab row, so they can't drift apart.
+  const sections = [
+    { id: 'basic', label: 'Basic Info' },
+    { id: 'assignments', label: 'Assignments' },
+    { id: 'contact', label: 'Contact' },
+    { id: 'admin', label: 'Admin' },
+    ...(isEdit ? [
+      { id: 'availability', label: 'Availability' },
+      { id: 'file', label: 'File' },
+    ] : []),
+  ];
+
   useEffect(() => {
     if (member) setForm({ ...defaultMember, ...member });
     else setForm(defaultMember);
     setTmNumberError('');
+    setTab('basic');
   }, [member, open]);
 
   const handleSave = () => {
@@ -88,19 +105,60 @@ export default function TeamMemberModal({ open, onClose, member, locations, role
           )}
         </DialogHeader>
 
-        <Tabs defaultValue="basic" className="flex-1 overflow-hidden">
-          <TabsList className="mb-3">
-            <TabsTrigger value="basic" className="text-xs">Basic Info</TabsTrigger>
-            <TabsTrigger value="assignments" className="text-xs">Assignments</TabsTrigger>
-            <TabsTrigger value="contact" className="text-xs">Contact</TabsTrigger>
-            <TabsTrigger value="admin" className="text-xs">Admin</TabsTrigger>
-            {isEdit && <TabsTrigger value="availability" className="text-xs">Availability</TabsTrigger>}
-            {isEdit && <TabsTrigger value="file" className="text-xs">File</TabsTrigger>}
+        <Tabs value={tab} onValueChange={setTab} className="flex-1 flex flex-col overflow-hidden min-h-0">
+          {/* Phone: a section picker, not tabs. Six tabs never fit one line, and
+              both alternatives read as broken — wrapping orphaned two of them on
+              a second row, and a scrolling strip hides tabs behind a swipe
+              nobody discovers. A single select always fits, names the section
+              you're in, and lists the rest on tap. Tabs return from sm up. */}
+          <div className="sm:hidden mb-3 shrink-0">
+            <Select value={tab} onValueChange={setTab}>
+              {/* Dressed as navigation, not a form field. A bare select here
+                  looked identical to Status and Date of Birth further down the
+                  same form, so it read as another thing to fill in. The muted
+                  fill (matching the desktop tab strip), the icon, and the
+                  "Section 1 of 6" eyebrow say "this moves you around". */}
+              <SelectTrigger
+                aria-label="Choose a section"
+                className="w-full h-auto py-2 bg-primary/10 border border-primary/40 text-primary shadow-none
+                           [&>span]:line-clamp-none [&>svg]:h-5 [&>svg]:w-5 [&>svg]:opacity-100 [&>svg]:text-primary"
+              >
+                <span className="flex items-center gap-2.5 min-w-0">
+                  <LayoutList className="w-4 h-4 shrink-0" />
+                  <span className="flex flex-col items-start min-w-0 leading-tight">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-primary/70">
+                      Section {Math.max(0, sections.findIndex(s => s.id === tab)) + 1} of {sections.length}
+                    </span>
+                    <span className="font-semibold text-foreground"><SelectValue /></span>
+                  </span>
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                {/* plain labels: the selected item's content is what renders
+                    inside the trigger, so anything decorative here leaks up
+                    there and fights the "Section 1 of 6" line */}
+                {sections.map(s => (
+                  <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* shrink-0: as a flex child this strip would otherwise be squeezed
+              below its own height, spilling the tabs over the content beneath */}
+          <TabsList className="mb-3 hidden sm:inline-flex shrink-0">
+            {sections.map(s => (
+              <TabsTrigger key={s.id} value={s.id} className="text-xs">{s.label}</TabsTrigger>
+            ))}
           </TabsList>
 
           {/* native overflow, not Radix ScrollArea: Safari can't scroll a
               ScrollArea whose root is only max-height-bounded */}
-          <div className="flex-1 pr-4 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 200px)', WebkitOverflowScrolling: 'touch' }}>
+          {/* flex-1 + min-h-0 rather than a hardcoded calc(90vh - 200px): that
+              magic 200 assumed a one-line tab strip, so a wrapped second row
+              pushed the bottom of the form (Status) out under the footer. This
+              takes whatever height is actually left, whatever the header does. */}
+          <div className="flex-1 min-h-0 pr-4 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
             <TabsContent value="basic" className="space-y-3 mt-0">
               <div>
                 <Label className="text-xs">TM # (Team Member ID)</Label>
@@ -369,6 +427,8 @@ export default function TeamMemberModal({ open, onClose, member, locations, role
 
             {isEdit && (
               <TabsContent value="file" className="mt-0">
+                {/* how reliably they punch in/out — informational, feeds nothing */}
+                <PunchReliabilityCard memberId={member.id} className="mb-4" />
                 {/* live journal + discipline record — saves itself, independent of the form's Update button */}
                 <MemberFileTab
                   memberId={member.id}

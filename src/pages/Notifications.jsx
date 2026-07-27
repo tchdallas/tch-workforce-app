@@ -1,5 +1,6 @@
-﻿import React from 'react';
+﻿import React, { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { invalidateNavBadges } from '@/hooks/useNavBadges';
 import { base44 } from '@/api/base44Client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,9 +20,17 @@ export default function Notifications() {
     placeholderData: [],
   });
 
+  // This page reads ['all-notifications'] (everything, read or not) while the
+  // bell and hamburger count ['notifications', memberId] (unread only) — two
+  // different fetches, so they must be separate keys. Marking read here used to
+  // invalidate only this page's key, which is why the page could say "0 unread"
+  // while the badges still showed 3 until a full reload.
   const markRead = useMutation({
     mutationFn: (id) => base44.entities.Notification.update(id, { readStatus: true }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['all-notifications'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['all-notifications'] });
+      invalidateNavBadges(queryClient);
+    },
   });
 
   const markAllRead = useMutation({
@@ -29,9 +38,31 @@ export default function Notifications() {
       const unread = notifications.filter(n => !n.readStatus);
       await Promise.all(unread.map(n => base44.entities.Notification.update(n.id, { readStatus: true })));
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['all-notifications'] }); toast.success('All marked as read'); },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['all-notifications'] });
+      invalidateNavBadges(queryClient);
+      // the auto-mark on arrival passes silent — a toast for something the user
+      // didn't ask for is just noise
+      if (!variables?.silent) toast.success('All marked as read');
+    },
   });
 
+  // Opening this page IS attending to them, so the bubble clears on arrival
+  // rather than making you tap each one. The ids that were unread when you
+  // opened are remembered for this visit, so you can still see what's new
+  // after they've been marked read underneath.
+  const [unreadOnArrival, setUnreadOnArrival] = useState(() => new Set());
+  const autoMarked = useRef(false);
+  useEffect(() => {
+    if (autoMarked.current) return;
+    const unread = notifications.filter(n => !n.readStatus);
+    if (!unread.length) return;
+    autoMarked.current = true;
+    setUnreadOnArrival(new Set(unread.map(n => n.id)));
+    markAllRead.mutate({ silent: true });
+  }, [notifications]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const isNew = (n) => !n.readStatus || unreadOnArrival.has(n.id);
   const unreadCount = notifications.filter(n => !n.readStatus).length;
 
   const typeColors = {
@@ -59,10 +90,9 @@ export default function Notifications() {
           </div>
         )}
         {notifications.map(n => (
-          <Card key={n.id} className={cn('transition-colors', !n.readStatus && 'bg-primary/5 border-primary/20')}>
+          <Card key={n.id} className={cn('transition-colors', isNew(n) && 'bg-primary/5 border-primary/20')}>
             <CardContent className="p-4 flex items-start gap-3">
-              {!n.readStatus && <div className="w-2 h-2 rounded-full bg-primary mt-1.5 shrink-0" />}
-              {n.readStatus && <div className="w-2 h-2 shrink-0" />}
+              {isNew(n) ? <div className="w-2 h-2 rounded-full bg-primary mt-1.5 shrink-0" /> : <div className="w-2 h-2 shrink-0" />}
               <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-2">
                   <div>

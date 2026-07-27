@@ -9,7 +9,12 @@ const TabsList = React.forwardRef(({ className, ...props }, ref) => (
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      "inline-flex h-9 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground",
+      // min-h + wrap instead of a fixed h-9: a fixed-height row silently clipped
+      // its last tabs on narrow screens (Requests has six). Single-row strips
+      // are unchanged; only ones that would have overflowed grow to a second
+      // line. shrink-0 because inside a flex column this strip would otherwise
+      // be squeezed below its own content height and spill over what's beneath.
+      "inline-flex min-h-9 shrink-0 flex-wrap items-center justify-center gap-y-1 rounded-lg bg-muted p-1 text-muted-foreground",
       className
     )}
     {...props} />

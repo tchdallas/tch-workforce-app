@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Upload, FileText, CheckCircle, XCircle, Download, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 const REQUIRED = ['firstName', 'lastName', 'email'];
 // badgeNumber = the Paylocity Badge Number (stored as the member's TM#) —
@@ -148,6 +149,16 @@ function deriveAbbrev(name) {
   return letters.slice(0, 3).toUpperCase();
 }
 
+// Paylocity writes dates as MM/DD/YYYY, sometimes with a time appended. Take
+// the date part and normalize it; anything unreadable becomes blank rather than
+// rejecting the whole person, because these enrich a record, they don't
+// identify one. (The preview reports how many were read, so a file whose date
+// columns don't land is visible before you commit the import.)
+const paylocityDate = (raw) => {
+  const first = (raw || '').trim().split(/[ T]/)[0];
+  return normalizeDate(first) || '';
+};
+
 function parsePaylocityContactList(text) {
   const lines = text.replace(/\r/g, '').split('\n').filter(l => l.trim());
   const rawHeaders = splitCSVLine(lines[0]);
@@ -170,12 +181,35 @@ function parsePaylocityContactList(text) {
         lastName: col(vals, 'lastname'),
         email: (col(vals, 'personalemail') || col(vals, 'email')),
         phone: sanitizePhone(col(vals, 'mobilephone')) || sanitizePhone(col(vals, 'homephone')),
+        // These were missing entirely, so every Paylocity import silently left
+        // date_of_birth and start_date null for the whole company — and
+        // start_date is what the attendance policy uses to decide who is still
+        // inside their first 90 days.
+        dateOfBirth: paylocityDate(
+          col(vals, 'birthdate') || col(vals, 'dateofbirth') || col(vals, 'dob')
+        ),
+        startDate: paylocityDate(
+          col(vals, 'hiredate') || col(vals, 'originalhiredate')
+          || col(vals, 'lasthiredate') || col(vals, 'startdate') || col(vals, 'rehiredate')
+        ),
         _locations: [],
         _roles: [],
       };
       byEmp.set(empId, m);
     }
     if (!m.phone) m.phone = sanitizePhone(col(vals, 'mobilephone')) || sanitizePhone(col(vals, 'homephone'));
+    // a member spans several lines (one per room) — take the first line that has it
+    if (!m.dateOfBirth) {
+      m.dateOfBirth = paylocityDate(
+        col(vals, 'birthdate') || col(vals, 'dateofbirth') || col(vals, 'dob')
+      );
+    }
+    if (!m.startDate) {
+      m.startDate = paylocityDate(
+        col(vals, 'hiredate') || col(vals, 'originalhiredate')
+        || col(vals, 'lasthiredate') || col(vals, 'startdate') || col(vals, 'rehiredate')
+      );
+    }
     const loc = col(vals, 'locationdescription');
     if (loc && !m._locations.some(l => l.toLowerCase() === loc.toLowerCase())) m._locations.push(loc);
     // "Position Description" is the job title → the app role. "Needed" is a
@@ -190,6 +224,8 @@ function parsePaylocityContactList(text) {
     lastName: m.lastName,
     email: m.email,
     phone: m.phone,
+    dateOfBirth: m.dateOfBirth,
+    startDate: m.startDate,
     homeLocationName: m._locations[0] || '',
     assignedLocationNames: m._locations.join(';'),
     assignedRoleNames: m._roles.join(';'),
@@ -679,6 +715,25 @@ export default function ImportTeamMembersModal({ open, onClose, onImported }) {
                       consolidated from <span className="font-semibold text-foreground">{preview.rawRowCount}</span> rows.
                       Multiple location rows per person are merged into their assigned locations.
                       "Employee Id" is imported as the <span className="font-medium">Team Member ID</span>; phone numbers are cleaned automatically.
+                    </p>
+                    {/* Dates were silently dropped by this parser once already,
+                        leaving the whole company without a start date. State the
+                        count so a file whose date columns don't land is obvious
+                        here, instead of being discovered months later. */}
+                    <p className="text-xs mt-1">
+                      <span className={cn('font-semibold',
+                        preview.rows.filter(r => r.startDate).length ? 'text-foreground' : 'text-amber-600')}>
+                        {preview.rows.filter(r => r.startDate).length}
+                      </span>
+                      <span className="text-muted-foreground"> with a hire date · </span>
+                      <span className={cn('font-semibold',
+                        preview.rows.filter(r => r.dateOfBirth).length ? 'text-foreground' : 'text-amber-600')}>
+                        {preview.rows.filter(r => r.dateOfBirth).length}
+                      </span>
+                      <span className="text-muted-foreground"> with a date of birth</span>
+                      {!preview.rows.some(r => r.startDate) && (
+                        <span className="text-amber-600"> — check the file has a Hire Date column</span>
+                      )}
                     </p>
                   </div>
 

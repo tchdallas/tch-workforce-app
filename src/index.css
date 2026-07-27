@@ -127,6 +127,23 @@
   button, a, [role="button"] {
     user-select: none;
     -webkit-user-select: none;
+    /* Tell the browser these will never be double-tap-zoomed or panned, so it
+       fires the tap immediately instead of holding it to see if a gesture is
+       starting. Without this a tap that drifts a pixel can be read as a scroll
+       and dropped — which is what made the small header icons feel dead. */
+    touch-action: manipulation;
+  }
+
+  /* Toasts are portalled to <body>, outside any open Radix dialog. A modal
+     dialog sets pointer-events:none on <body>, and because pointer-events is
+     inherited — and sonner never sets `auto` anywhere — every toast behind a
+     dialog rendered normally but silently refused clicks. That's what made the
+     "Update now" prompt look dead. Opt the toast itself back in; the container
+     stays untouched so empty space around it still can't block the page, and
+     sonner's own [data-visible=false] rule (higher specificity) still keeps
+     hidden toasts inert. */
+  [data-sonner-toast] {
+    pointer-events: auto;
   }
 
   /* Native <select> option lists render in an OS popup that ignores Tailwind

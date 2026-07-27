@@ -5,6 +5,8 @@ import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useCurrentMember } from '@/hooks/useCurrentMember';
 import { useUiPrefs } from '@/hooks/useUiPrefs';
+import { useNavBadges } from '@/hooks/useNavBadges';
+import NavBadge from './NavBadge';
 import { useAuth } from '@/lib/AuthContext';
 import {
   visibleGroupsFor, footerNavItems, isPathActive, activeGroupLabel,
@@ -26,6 +28,7 @@ export default function MobileMenu({ open, onClose }) {
 
   // DB-backed favorites — same row the desktop sidebar uses, so pins sync
   const { favorites, setFavorites } = useUiPrefs();
+  const { byPath: badges } = useNavBadges();
   const toggleFavorite = (path) => setFavorites(
     favorites.includes(path) ? favorites.filter((p) => p !== path) : [...favorites, path]
   );
@@ -67,6 +70,8 @@ export default function MobileMenu({ open, onClose }) {
         >
           <item.icon className="w-5 h-5 shrink-0" style={active && color ? { color } : undefined} />
           <span className="truncate">{item.label}</span>
+          {/* ml-auto lands it inside the pr-9 gutter, clear of the favourite star */}
+          <NavBadge count={badges[item.path]} className="ml-auto" />
         </Link>
         <button
           type="button"

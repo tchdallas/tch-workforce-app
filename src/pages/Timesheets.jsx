@@ -13,10 +13,41 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useTeamMembers, useLocations } from '@/lib/useAppData';
 import { useCurrentMember } from '@/hooks/useCurrentMember';
-import { Camera, Pencil, Download, AlertTriangle } from 'lucide-react';
+import { Camera, Pencil, Download, AlertTriangle, Check, Bell, CheckCircle2, Clock } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  approveEntry, proposeEntry, acceptCounter, forceReminder, markExported,
+} from '@/lib/timesheets';
+import { cn } from '@/lib/utils';
+import { invalidateNavBadges } from '@/hooks/useNavBadges';
 
 const fmtDT = (d) => format(new Date(d), "yyyy-MM-dd'T'HH:mm");
+
+// Where an entry stands in the approval flow. Verified is deliberately quiet —
+// it's the expected end state, and badging every settled row would bury the
+// handful that actually need someone.
+function StatusBadge({ e }) {
+  if (!e.clockOut) return null;
+  if (e.status === 'verified') {
+    return (
+      <span title={e.exportedAt ? `Exported ${format(new Date(e.exportedAt), 'MMM d')}` : 'Verified — will export'}>
+        <CheckCircle2 className={cn('w-3.5 h-3.5', e.exportedAt ? 'text-muted-foreground' : 'text-emerald-500')} />
+      </span>
+    );
+  }
+  if (e.status === 'pending_member') {
+    return (
+      <Badge className="text-[10px] border-0 bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400 gap-1">
+        <Clock className="w-2.5 h-2.5" /> with team member
+      </Badge>
+    );
+  }
+  return (
+    <Badge className="text-[10px] border-0 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+      {e.proposedAt ? 'they proposed a change' : 'needs approval'}
+    </Badge>
+  );
+}
 // Paylocity forbids commas and most special characters in text fields
 const sanitize = (s) => String(s ?? '').replace(/[,\-._&|:*%+$@!?~[\];{}#"']/g, ' ').replace(/\s+/g, ' ').trim();
 
@@ -102,20 +133,53 @@ export default function Timesheets() {
   const openEntries = entries.filter(e => !e.clockOut);
   const missingBadge = [...new Set(entries.filter(e => !memberById.get(e.teamMemberId)?.tmNumber).map(e => e.teamMemberId))];
 
+  // export bookkeeping: what ships, what gets left behind, and who to chase
+  const verifiedExportable = entries.filter(
+    e => e.status === 'verified' && e.clockOut && memberById.get(e.teamMemberId)?.tmNumber
+  );
+  const alreadyExported = verifiedExportable.filter(e => e.exportedAt).length;
+  const unverified = entries.filter(e => e.clockOut && e.status && e.status !== 'verified');
+  const unverifiedPeople = useMemo(() => {
+    const m = new Map();
+    unverified.forEach(e => {
+      const cur = m.get(e.teamMemberId) || { id: e.teamMemberId, count: 0, waitingOnMember: true };
+      cur.count += 1;
+      // if anything is still on the manager's desk, that's the actionable half
+      if (e.status !== 'pending_member') cur.waitingOnMember = false;
+      m.set(e.teamMemberId, cur);
+    });
+    return [...m.values()].sort((a, b) => nameOf(a.id).localeCompare(nameOf(b.id)));
+  }, [unverified]); // eslint-disable-line
+  const needsMe = entries.filter(e => e.clockOut && e.status === 'pending_manager').length;
+
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['time-entries'] });
+    invalidateNavBadges(queryClient); // approving drops the Timesheets bubble now, not on next reload
+  };
+
+  // A manager no longer writes the clock columns directly — the database revokes
+  // that. Edits are *proposed*, and the team member has to consent before the
+  // hours become payroll data.
   const saveEdit = useMutation({
-    mutationFn: () => base44.entities.TimeEntry.update(editEntry.id, {
-      clockIn: new Date(editForm.clockIn).toISOString(),
-      clockOut: editForm.clockOut ? new Date(editForm.clockOut).toISOString() : null,
-      editNote: editForm.editNote || undefined,
-      editedBy: currentMember?.id,
-      method: editEntry.method,
-    }),
+    mutationFn: () => proposeEntry(editEntry.id, editForm.clockIn, editForm.clockOut, editForm.editNote),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['time-entries'] });
+      refresh();
       setEditEntry(null);
-      toast.success('Entry updated');
+      toast.success('Sent to the team member to confirm');
     },
     onError: (e) => toast.error(e.message || 'Could not save'),
+  });
+
+  const approve = useMutation({
+    mutationFn: (e) => (e.status === 'pending_manager' && e.proposedAt ? acceptCounter(e.id) : approveEntry(e.id)),
+    onSuccess: () => { refresh(); toast.success('Verified'); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const remind = useMutation({
+    mutationFn: (id) => forceReminder(id, null),
+    onSuccess: () => toast.success('Reminder sent'),
+    onError: (e) => toast.error(e.message),
   });
 
   const viewPhoto = async (path) => {
@@ -126,8 +190,12 @@ export default function Timesheets() {
 
   // Paylocity Universal Time Import: 24 columns, NO header row, plain CSV.
   // EMPLOYEE ID | DET | DETCODE | HOURS | ... | BEGIN DATE (col 15) | END DATE (col 16) | ...
-  const exportCsv = () => {
-    const rows = entries
+  // Only verified entries leave the building. Unverified ones aren't blocked —
+  // they're just excluded, and named in the confirm dialog so you can see whose
+  // pay is about to be short rather than reading a bare count.
+  const exportCsv = async () => {
+    const exportable = entries.filter(e => e.status === 'verified');
+    const rows = exportable
       .filter(e => e.clockOut && memberById.get(e.teamMemberId)?.tmNumber)
       .map(e => {
         const cols = new Array(24).fill('');
@@ -139,7 +207,7 @@ export default function Timesheets() {
         cols[15] = format(new Date(e.clockOut), 'MM/dd/yyyy HH:mm');
         return cols.join(',');
       });
-    if (rows.length === 0) { toast.error('No completed entries with badge numbers in this range'); return; }
+    if (rows.length === 0) { toast.error('No verified entries with badge numbers in this range'); return; }
     const blob = new Blob([rows.join('\r\n') + '\r\n'], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -147,6 +215,11 @@ export default function Timesheets() {
     a.download = `paylocity_time_import_${rangeStart}_${rangeEnd}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+    // stamp what went out, so a repeat run is visibly a re-export
+    try {
+      await markExported(exportable.filter(e => memberById.get(e.teamMemberId)?.tmNumber).map(e => e.id));
+      refresh();
+    } catch { /* the file is already downloaded; don't fail the export over bookkeeping */ }
     setExportOpen(false);
     toast.success(`Exported ${rows.length} entries`);
   };
@@ -180,6 +253,11 @@ export default function Timesheets() {
         {openEntries.length > 0 && (
           <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
             {openEntries.length} still clocked in
+          </Badge>
+        )}
+        {needsMe > 0 && (
+          <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+            {needsMe} need{needsMe === 1 ? 's' : ''} your approval
           </Badge>
         )}
       </div>
@@ -226,10 +304,36 @@ export default function Timesheets() {
                         </Badge>
                       )}
                       <Badge variant="outline" className="text-[10px] uppercase">{e.method}</Badge>
+                      <StatusBadge e={e} />
                       {e.editedBy && (
                         <span title={e.editNote || 'Edited by a manager'}>
                           <Pencil className="w-3 h-3 text-amber-500" />
                         </span>
+                      )}
+                      {/* approve: a clean punch is one tap; a member's counter-proposal
+                          shows what they're asking for before you accept it */}
+                      {e.clockOut && (e.status === 'pending_manager' || !e.status) && (
+                        <Button
+                          size="sm" variant="outline"
+                          className="h-6 gap-1 text-[11px] px-2"
+                          disabled={approve.isPending}
+                          title={e.proposedAt ? 'Accept the times they proposed' : 'Verify these hours'}
+                          onClick={() => approve.mutate(e)}
+                        >
+                          <Check className="w-3 h-3" />
+                          {e.proposedAt ? 'Accept' : 'Approve'}
+                        </Button>
+                      )}
+                      {e.status === 'pending_member' && (
+                        <Button
+                          size="sm" variant="ghost"
+                          className="h-6 gap-1 text-[11px] px-2 text-muted-foreground"
+                          disabled={remind.isPending}
+                          title="Send them a reminder now"
+                          onClick={() => remind.mutate(e.id)}
+                        >
+                          <Bell className="w-3 h-3" /> Remind
+                        </Button>
                       )}
                       {(e.clockInPhoto || e.clockOutPhoto) && (
                         <button
@@ -297,13 +401,40 @@ export default function Timesheets() {
           <DialogHeader><DialogTitle>Export for Paylocity</DialogTitle></DialogHeader>
           <div className="space-y-3 text-sm">
             <p>
-              Exports <span className="font-medium">{entries.filter(e => e.clockOut && memberById.get(e.teamMemberId)?.tmNumber).length}</span> completed
+              Exports <span className="font-medium">{verifiedExportable.length}</span> verified
               entries ({rangeStart} → {rangeEnd}) as a Universal Time Import CSV — no headers, 24 columns,
               earnings code <span className="font-mono">{sanitize(detcode) || 'REG'}</span>. Upload it directly in Paylocity.
             </p>
+            {unverified.length > 0 && (
+              <div className="rounded-md border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-3">
+                <p className="flex gap-2 text-amber-700 dark:text-amber-400 font-medium">
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                  {unverified.length} timesheet{unverified.length === 1 ? '' : 's'} still need approval and won't be included.
+                </p>
+                {/* names, not a count — a bare number doesn't tell you whose pay is short */}
+                <ul className="mt-2 space-y-0.5 text-[13px] max-h-40 overflow-y-auto">
+                  {unverifiedPeople.map(p => (
+                    <li key={p.id} className="flex items-center justify-between gap-3">
+                      <span>{nameOf(p.id)}</span>
+                      <span className="text-muted-foreground text-[11px]">
+                        {p.count} {p.count === 1 ? 'entry' : 'entries'} · {p.waitingOnMember ? 'with them' : 'needs your approval'}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  They'll export on the next run once approved — or approve them now and re-export.
+                </p>
+              </div>
+            )}
             {openEntries.length > 0 && (
               <p className="flex gap-2 text-amber-600"><AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                 {openEntries.length} entr{openEntries.length === 1 ? 'y is' : 'ies are'} still open (no clock-out) and will be skipped.
+              </p>
+            )}
+            {alreadyExported > 0 && (
+              <p className="flex gap-2 text-sky-600"><AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                {alreadyExported} of these were already exported — running this again will send them a second time.
               </p>
             )}
             {missingBadge.length > 0 && (

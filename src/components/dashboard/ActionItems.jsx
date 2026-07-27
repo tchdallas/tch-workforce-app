@@ -13,15 +13,21 @@ import {
 import { useCurrentMember } from '@/hooks/useCurrentMember';
 import { format, parseISO, addDays, isBefore, startOfDay } from 'date-fns';
 import { toast } from 'sonner';
-import { PenLine, Scale, CheckCircle2, ArrowRight } from 'lucide-react';
+import { PenLine, Scale, CheckCircle2, ArrowRight, ScrollText, Clock } from 'lucide-react';
 import { entryTypeLabel } from '@/components/discipline/disciplineShared';
+import { useOutstandingPolicyAcks } from '@/lib/policies';
+import { useMyPendingTimeEntries } from '@/lib/timesheets';
+import ConfirmHoursDialog from '@/components/timesheets/ConfirmHoursDialog';
 
 // "Needs Your Attention" — the team member's task inbox on the Dashboard.
 // Every actionable thing lands here. Current sources:
 //   * discipline documents awaiting the member's signature
 //   * attendance points still inside the appeal window (appeal right here)
+//   * policies and policy updates awaiting the member's confirmation
+//   * hours a manager entered for them, awaiting confirmation (payroll blocks
+//     on these, so they're the most time-sensitive thing in the list)
 // Future sources plug in as more list items: announcements requiring
-// acknowledgment, policy-update confirmations, training tasks, surveys.
+// acknowledgment, training tasks, surveys.
 export default function ActionItems({ showEmpty = false }) {
   const { member } = useCurrentMember();
   const queryClient = useQueryClient();
@@ -85,8 +91,24 @@ export default function ActionItems({ showEmpty = false }) {
     onError: (e) => toast.error(e.message),
   });
 
+  const { data: policyAcks } = useOutstandingPolicyAcks(member?.id);
+  const policyItems = useMemo(() => ([
+    ...(policyAcks?.policies || []).map(p => ({
+      key: `p-${p.policyId}`, policyId: p.policyId,
+      headline: 'New policy to confirm', detail: p.title,
+    })),
+    ...(policyAcks?.updates || []).map(u => ({
+      key: `u-${u.updateId}`, policyId: u.policyId,
+      headline: `Policy ${u.kind === 'addendum' ? 'addendum' : u.kind === 'clarification' ? 'clarification' : 'update'} to confirm`,
+      detail: u.title,
+    })),
+  ]), [policyAcks]);
+
+  const { data: pendingHours = [] } = useMyPendingTimeEntries(member?.id);
+  const [confirmEntry, setConfirmEntry] = useState(null);
+
   const typeLabel = (id) => types.find(t => t.id === id)?.label || 'Attendance infraction';
-  const itemCount = pendingDocs.length + appealable.length;
+  const itemCount = pendingDocs.length + appealable.length + policyItems.length + pendingHours.length;
 
   if (!member || (itemCount === 0 && !showEmpty)) return null;
 
@@ -116,6 +138,37 @@ export default function ActionItems({ showEmpty = false }) {
                   <p className="text-xs text-muted-foreground">
                     {entryTypeLabel(d.entryType)} · issued {d.issuedAt ? format(new Date(d.issuedAt), 'MMM d') : ''}
                   </p>
+                </div>
+                <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
+              </Link>
+            ))}
+
+            {pendingHours.map(e => (
+              <button
+                key={e.id}
+                type="button"
+                onClick={() => setConfirmEntry(e)}
+                className="w-full text-left flex items-center gap-3 p-3 rounded-lg border border-amber-300 dark:border-amber-700 hover:bg-accent/40 transition-colors"
+              >
+                <Clock className="w-4 h-4 text-amber-500 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">Confirm your hours</p>
+                  <p className="text-xs text-muted-foreground">
+                    {format(new Date(e.proposed_clock_in || e.clock_in), 'EEE, MMM d')} ·
+                    {' '}{e.manager_created ? 'added by a manager' : 'times were adjusted'} — payroll needs this
+                  </p>
+                </div>
+                <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
+              </button>
+            ))}
+
+            {policyItems.map(p => (
+              <Link key={p.key} to={`/policies/${p.policyId}`}
+                    className="flex items-center gap-3 p-3 rounded-lg border hover:bg-accent/40 transition-colors">
+                <ScrollText className="w-4 h-4 text-sky-500 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">{p.headline}</p>
+                  <p className="text-xs text-muted-foreground truncate">{p.detail}</p>
                 </div>
                 <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
               </Link>
@@ -171,6 +224,12 @@ export default function ActionItems({ showEmpty = false }) {
           </DialogContent>
         </Dialog>
       )}
+
+      <ConfirmHoursDialog
+        entry={confirmEntry}
+        memberId={member?.id}
+        onClose={() => setConfirmEntry(null)}
+      />
     </Card>
   );
 }

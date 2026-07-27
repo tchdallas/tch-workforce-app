@@ -8,6 +8,14 @@ import { toast } from 'sonner';
 const currentBundle = () =>
   document.querySelector('script[src*="assets/index-"]')?.getAttribute('src');
 
+// Is the user mid-task in a modal? Updating means a full reload, which would
+// discard whatever they're part-way through typing — so hold the prompt until
+// they're back on a normal screen. (It also dodges the inherited
+// pointer-events:none a modal puts on <body>; see the toast rule in index.css.)
+const modalOpen = () => !!document.querySelector(
+  '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]'
+);
+
 export default function useVersionCheck({ auto = false, intervalMs = 5 * 60 * 1000 } = {}) {
   useEffect(() => {
     const mine = currentBundle();
@@ -21,6 +29,8 @@ export default function useVersionCheck({ auto = false, intervalMs = 5 * 60 * 10
         const html = await res.text();
         const latest = html.match(/[^"']*assets\/index-[^"']+\.js/)?.[0];
         if (!latest || latest === mine) return;
+        // don't set notified — retry on the next tick, once the modal is closed
+        if (!auto && modalOpen()) return;
         notified = true;
         if (auto) {
           window.location.reload();

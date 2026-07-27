@@ -13,6 +13,7 @@ import { useLocations, useRoles, useTeamMembers } from '@/lib/useAppData';
 import { useCurrentMember } from '@/hooks/useCurrentMember';
 import useRealtimeNotifications from '@/hooks/useRealtimeNotifications';
 import useVersionCheck from '@/hooks/useVersionCheck';
+import useResumeAtDashboard from '@/hooks/useResumeAtDashboard';
 
 // Primary tabs that should preserve their own scroll position
 const PRIMARY_TABS = new Set(['/', '/schedule', '/roadmap', '/open-shifts']);
@@ -26,6 +27,9 @@ export default function AppLayout() {
   useRealtimeNotifications();
   // stale open tabs get an "Update now" prompt after each deploy
   useVersionCheck();
+  // returning after a long gap (or a different person signing in) starts at the
+  // Dashboard rather than the screen the app happened to be left on
+  useResumeAtDashboard();
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);

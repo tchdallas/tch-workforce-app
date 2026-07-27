@@ -39,6 +39,32 @@ export function businessDayStartHour(settings, locationId) {
   return Number.isFinite(n) && n >= 0 && n <= 12 ? n : 0;
 }
 
+// Each club orders the positions on its schedule grid by relevance/need.
+// Location-scoped setting holding an ordered array of role ids. Unlike the
+// global roles.display_order, this is per-club — the same role can sit near
+// the top at one room and near the bottom at another.
+export function scheduleRoleOrder(settings, locationId) {
+  if (!locationId) return [];
+  const val = settings.find(
+    s => s.key === 'schedule_role_order' && s.scope === 'location' && s.locationId === locationId
+  )?.value;
+  return Array.isArray(val) ? val.filter(id => typeof id === 'string') : [];
+}
+
+// Apply a club's order to a role list. Roles missing from the saved order
+// (newly created, or never sorted here) keep their incoming display_order and
+// fall in behind the ordered ones — a new role is never hidden or jumped to top.
+export function sortRolesByOrder(roles, order) {
+  if (!order?.length) return roles;
+  const rank = new Map(order.map((id, i) => [id, i]));
+  // Array.sort is stable, so unranked roles hold their relative display_order
+  return [...roles].sort((a, b) => {
+    const ra = rank.has(a.id) ? rank.get(a.id) : Number.MAX_SAFE_INTEGER;
+    const rb = rank.has(b.id) ? rank.get(b.id) : Number.MAX_SAFE_INTEGER;
+    return ra - rb;
+  });
+}
+
 export function useLocations() {
   return useQuery({
     queryKey: ['locations'],

@@ -5,6 +5,8 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useCurrentMember } from '@/hooks/useCurrentMember';
 import { useUiPrefs } from '@/hooks/useUiPrefs';
+import { useNavBadges } from '@/hooks/useNavBadges';
+import NavBadge from './NavBadge';
 import { useAuth } from '@/lib/AuthContext';
 import {
   visibleGroupsFor, footerNavItems, isPathActive, activeGroupLabel,
@@ -28,6 +30,7 @@ export default function Sidebar({ collapsed, setCollapsed }) {
   // Favorites — per member, pinned to a section at the very top.
   // Stored in the DB (useUiPrefs) so they follow the person across devices.
   const { favorites, setFavorites } = useUiPrefs();
+  const { byPath: badges } = useNavBadges();
   const toggleFavorite = (path) => setFavorites(
     favorites.includes(path) ? favorites.filter((p) => p !== path) : [...favorites, path]
   );
@@ -76,6 +79,10 @@ export default function Sidebar({ collapsed, setCollapsed }) {
         >
           <item.icon className="w-5 h-5 shrink-0" style={active && color ? { color } : undefined} />
           {!collapsed && <span className="truncate">{item.label}</span>}
+          {/* collapsed rail has no room for a number — a dot still says "look here" */}
+          {collapsed
+            ? <NavBadge count={badges[item.path]} dot className="absolute top-1.5 right-1.5" />
+            : <NavBadge count={badges[item.path]} className="ml-auto" />}
         </Link>
         {!collapsed && (
           <button

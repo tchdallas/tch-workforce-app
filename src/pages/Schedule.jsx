@@ -6,9 +6,7 @@ import ViewSchedule from './ViewSchedule';
 import { startOfWeek, addDays, format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Clipboard, Upload, FileText, Search, X, Filter, Check } from 'lucide-react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { cn } from '@/lib/utils';
+import { Plus, Clipboard, Upload, FileText, Search, X } from 'lucide-react';
 import PageHeader from '@/components/common/PageHeader';
 import LocationSelector from '@/components/common/LocationSelector';
 import WeekSelector from '@/components/schedule/WeekSelector';
@@ -22,8 +20,9 @@ import PublishButton from '@/components/schedule/PublishButton';
 import DayViewSummary from '@/components/schedule/DayViewSummary';
 import DayTimeline from '@/components/schedule/DayTimeline';
 import ImportTemplateModal from '@/components/schedule/ImportTemplateModal';
+import RolePanel from '@/components/schedule/RolePanel';
 import TeamMemberModal from '@/components/team/TeamMemberModal';
-import { useLocations, useRoles, useTeamMembers, usePars, useParTemplates, useAllAvailability, businessDayStartHour } from '@/lib/useAppData';
+import { useLocations, useRoles, useTeamMembers, usePars, useParTemplates, useAllAvailability, businessDayStartHour, scheduleRoleOrder, sortRolesByOrder } from '@/lib/useAppData';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -31,7 +30,6 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Target } from 'lucide-react';
 import { roleDayCoverage } from '@/lib/parCoverage';
-import { rolesAvailableAtLocation } from '@/lib/roleLocations';
 import { toast } from 'sonner';
 
 function ScheduleBuilder({ assignedLocationIds = [] }) {
@@ -76,9 +74,17 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
   // Last grid cell the mouse touched — the target for Ctrl+V
   const hoverCellRef = useRef(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
-  // Scale: hide members without shifts (auto-on for big teams, user can toggle)
-  const [hideEmpty, setHideEmpty] = useState(false);
-  const hideEmptyInitialized = useRef(false);
+  // Scale: hide members without shifts. Starts OFF — you build a schedule by
+  // putting shifts on people who don't have one yet, so hiding exactly those
+  // people by default hid the point of the page. Role groups already load
+  // collapsed, which is what actually keeps 1,000+ members cheap to render.
+  // Remembered per device, like the view picker and role filter beside it.
+  const [hideEmpty, setHideEmpty] = useState(() => {
+    try { return localStorage.getItem('tch-schedule-only-scheduled') === '1'; } catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('tch-schedule-only-scheduled', hideEmpty ? '1' : '0'); } catch { /* ignore */ }
+  }, [hideEmpty]);
 
   const weekEnd = addDays(weekStart, spanDays - 1);
 
@@ -176,14 +182,6 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
     }
   }, [locations, selectedLocation, assignedLocationIds]);
 
-  // Big teams default to showing only scheduled members
-  useEffect(() => {
-    if (!hideEmptyInitialized.current && teamMembers.length > 50) {
-      hideEmptyInitialized.current = true;
-      setHideEmpty(true);
-    }
-  }, [teamMembers.length]);
-
   const { data: shifts = [] } = useQuery({
     queryKey: ['schedule-shifts', startStr, endStr, selectedLocation, spanDays],
     queryFn: async () => {
@@ -231,10 +229,21 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
     return { rolesStaffedHere: here, rolesStaffedAnywhere: anywhere };
   }, [teamMembers, selectedLocation]);
 
+  // Each club orders its positions by relevance/need (location-scoped setting).
+  // Held optimistically in pendingRoleOrder so a drag reflows the grid instantly,
+  // then cleared once the saved value catches up — no flash back to the old order.
+  const savedRoleOrder = useMemo(() => scheduleRoleOrder(appSettings, selectedLocation), [appSettings, selectedLocation]);
+  const [pendingRoleOrder, setPendingRoleOrder] = useState(null);
+  useEffect(() => { setPendingRoleOrder(null); }, [selectedLocation]);
+  useEffect(() => {
+    if (pendingRoleOrder && savedRoleOrder.join(',') === pendingRoleOrder.join(',')) setPendingRoleOrder(null);
+  }, [savedRoleOrder, pendingRoleOrder]);
+  const roleOrder = pendingRoleOrder || savedRoleOrder;
+
   const visibleRoles = useMemo(() => {
     // roles with a shift OR a par target here are clearly relevant → always render
     const keep = new Set([...shiftRoleIds, ...planWindows.map(w => w.roleId)]);
-    return roles.filter(r => {
+    const avail = roles.filter(r => {
       if (r.status && r.status !== 'active' && !keep.has(r.id)) return false;
       if (keep.has(r.id)) return true;
       if (r.assignedLocationIds?.length) return r.assignedLocationIds.includes(selectedLocation);
@@ -243,12 +252,33 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
       if (rolesStaffedAnywhere.has(r.id)) return rolesStaffedHere.has(r.id);
       return true;
     });
-  }, [roles, selectedLocation, shiftRoleIds, planWindows, rolesStaffedHere, rolesStaffedAnywhere]);
+    // this club's order wins; anything it doesn't mention keeps display_order
+    return sortRolesByOrder(avail, roleOrder);
+  }, [roles, selectedLocation, shiftRoleIds, planWindows, rolesStaffedHere, rolesStaffedAnywhere, roleOrder]);
+
+  const saveRoleOrder = useMutation({
+    mutationFn: async (ids) => {
+      if (!selectedLocation) throw new Error('Pick a location first');
+      const existing = appSettings.find(
+        s => s.key === 'schedule_role_order' && s.scope === 'location' && s.locationId === selectedLocation
+      );
+      if (existing) return base44.entities.AppSetting.update(existing.id, { value: ids });
+      return base44.entities.AppSetting.create({
+        key: 'schedule_role_order', value: ids, scope: 'location', locationId: selectedLocation,
+      });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['app-settings'] }),
+    onError: (e) => {
+      setPendingRoleOrder(null); // snap back to what's actually saved
+      toast.error(e?.message || 'Could not save the position order');
+    },
+  });
+  const reorderRoles = (ids) => { setPendingRoleOrder(ids); saveRoleOrder.mutate(ids); };
+  const resetRoleOrder = () => { setPendingRoleOrder([]); saveRoleOrder.mutate([]); };
 
   // Role filter for the grid — hide roles you don't schedule at this location.
   // Saved per location (localStorage) so the curated view sticks between visits.
   const [roleFilter, setRoleFilter] = useState([]); // role ids to SHOW; [] = all
-  const [roleFilterSearch, setRoleFilterSearch] = useState('');
   useEffect(() => {
     try { setRoleFilter(JSON.parse(localStorage.getItem(`tch-schedule-roles-${selectedLocation}`) || '[]') || []); }
     catch { setRoleFilter([]); }
@@ -278,7 +308,11 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
     return rest;
   };
 
-  const { member: currentMember } = useCurrentMember();
+  const { member: currentMember, isAdmin, canSeeAllLocations } = useCurrentMember();
+  // Setting the club's position order is a club-level config call: location_admin+
+  // with access to THIS club. app_settings RLS enforces the same bar server-side.
+  const canReorderRoles = !!selectedLocation && isAdmin
+    && (canSeeAllLocations || assignedLocationIds.includes(selectedLocation));
 
   const logShiftEvent = async (action, shiftId, details, before = null, after = null) => {
     base44.entities.AuditLog.create({
@@ -921,59 +955,19 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
         <WeekSelector weekStart={weekStart} setWeekStart={setWeekStart} spanDays={spanDays} />
         <ViewDropdown value={viewKey} onChange={setViewKey} />
 
-        <Popover onOpenChange={(o) => { if (!o) setRoleFilterSearch(''); }}>
-          <PopoverTrigger asChild>
-            <Button size="sm" variant="outline" className="gap-1.5 h-9" title="Show or hide roles in the grid (saved per location)">
-              <Filter className="w-4 h-4" /> Roles
-              {roleFilter.length > 0 && (
-                <span className="text-[10px] bg-primary text-primary-foreground rounded-full px-1.5 leading-tight">{roleFilter.length}</span>
-              )}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent align="start" className="w-72 p-0">
-            <div className="p-2 border-b border-border">
-              <div className="flex items-center gap-1.5 h-8 px-2 rounded-md border border-input bg-transparent">
-                <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                <input
-                  className="bg-transparent outline-none flex-1 text-sm placeholder:text-muted-foreground"
-                  placeholder="Search roles…"
-                  value={roleFilterSearch}
-                  onChange={(e) => setRoleFilterSearch(e.target.value)}
-                />
-              </div>
-              <div className="flex items-center gap-1.5 mt-2 text-xs">
-                <button type="button" className="px-2 py-0.5 rounded bg-muted hover:bg-muted/70" onClick={() => saveRoleFilter(rolesInUse)}>In use ({rolesInUse.length})</button>
-                <button type="button" className="px-2 py-0.5 rounded bg-muted hover:bg-muted/70" onClick={() => saveRoleFilter(visibleRoles.map(r => r.id))}>All</button>
-                <button type="button" className="px-2 py-0.5 rounded bg-muted hover:bg-muted/70" onClick={() => saveRoleFilter([])}>Clear</button>
-                <span className="ml-auto text-muted-foreground">{roleFilter.length ? `${roleFilter.length} shown` : 'all shown'}</span>
-              </div>
-            </div>
-            <div className="max-h-[50vh] overflow-y-auto p-1.5 space-y-0.5">
-              {visibleRoles
-                .filter(r => r.name.toLowerCase().includes(roleFilterSearch.toLowerCase()))
-                .map(r => {
-                  const on = roleFilter.length === 0 || roleFilter.includes(r.id);
-                  return (
-                    <button
-                      key={r.id}
-                      type="button"
-                      onClick={() => toggleRoleFilter(r.id)}
-                      className={cn('w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-muted transition-colors text-left')}
-                    >
-                      <span className={cn('w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0', roleFilter.includes(r.id) ? 'bg-primary border-primary' : 'border-input')}>
-                        {roleFilter.includes(r.id) && <Check className="w-2.5 h-2.5 text-primary-foreground" />}
-                      </span>
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: r.color || '#6366f1' }} />
-                      <span className={cn('truncate', !on && 'text-muted-foreground')}>{r.name}</span>
-                    </button>
-                  );
-                })}
-            </div>
-            <div className="border-t border-border px-2.5 py-1.5 text-[11px] text-muted-foreground">
-              Saved for {selectedLocation && (locations.find(l => l.id === selectedLocation)?.name) || 'this location'}. Empty = show all.
-            </div>
-          </PopoverContent>
-        </Popover>
+        <RolePanel
+          roles={visibleRoles}
+          roleFilter={roleFilter}
+          onSaveFilter={saveRoleFilter}
+          onToggleFilter={toggleRoleFilter}
+          rolesInUse={rolesInUse}
+          locationName={(selectedLocation && locations.find(l => l.id === selectedLocation)?.name) || ''}
+          canReorder={canReorderRoles}
+          onReorder={reorderRoles}
+          onResetOrder={resetRoleOrder}
+          hasCustomOrder={roleOrder.length > 0}
+          isSavingOrder={saveRoleOrder.isPending}
+        />
         {locParPlans.length > 0 && (
           <div className="flex items-center gap-1.5" title="Staffing plan to check coverage against">
             <Target className="w-3.5 h-3.5 text-muted-foreground" />
@@ -996,7 +990,7 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
             type="checkbox"
             className="h-3.5 w-3.5 accent-primary"
             checked={hideEmpty}
-            onChange={(e) => { hideEmptyInitialized.current = true; setHideEmpty(e.target.checked); }}
+            onChange={(e) => setHideEmpty(e.target.checked)}
           />
           Only scheduled
         </label>

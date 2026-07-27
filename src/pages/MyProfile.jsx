@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
@@ -13,10 +13,12 @@ import ChangePasswordCard from '@/components/profile/ChangePasswordCard';
 import MyDocumentsTab from '@/components/discipline/MyDocumentsTab';
 import MemberDownsView from '@/components/downs/MemberDownsView';
 import NotificationPreferencesForm from '@/components/profile/NotificationPreferencesForm';
+import PushNotificationCard from '@/components/profile/PushNotificationCard';
 import { toast } from 'sonner';
 import { User, CalendarOff, Clock, LogOut, FileText, Trophy, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/AuthContext';
+import PunchReliabilityCard from '@/components/timesheets/PunchReliabilityCard';
 
 export default function MyProfile() {
   const queryClient = useQueryClient();
@@ -74,6 +76,7 @@ export default function MyProfile() {
 
         <TabsContent value="info" className="mt-4">
           <PersonalInfoForm member={member} onSave={(data) => updateMutation.mutate(data)} saving={updateMutation.isPending} />
+          <PunchReliabilityCard memberId={member?.id} self className="mt-4" />
           <ChangePasswordCard />
         </TabsContent>
 
@@ -95,6 +98,9 @@ export default function MyProfile() {
 
         <TabsContent value="notifications" className="mt-4">
           <NotificationPreferencesForm memberId={member.id} />
+          {/* which events you get is above; this is whether they can reach you
+              when the app isn't open */}
+          <PushNotificationCard />
         </TabsContent>
       </Tabs>
 
