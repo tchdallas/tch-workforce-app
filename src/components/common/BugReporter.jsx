@@ -176,7 +176,11 @@ export default function BugReporter() {
           `fixed right-4 bottom-20 lg:bottom-6 z-40 flex items-center gap-2 h-11 pl-3 pr-4 rounded-full
           bg-foreground text-background shadow-lg border border-border/40
           hover:opacity-90 active:scale-95 transition-all text-sm font-medium`,
-          inputFocused && 'hidden'
+          inputFocused && 'hidden',
+          // Messages on mobile: the composer's send button lives exactly where
+          // this floats — hide it there (still available on desktop and every
+          // other page)
+          location.pathname.startsWith('/messages') && 'hidden lg:flex'
         )}
       >
         <MessageSquarePlus className="w-4 h-4" />

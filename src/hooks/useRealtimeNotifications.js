@@ -1,8 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/api/supabase';
 import { useCurrentMember } from '@/hooks/useCurrentMember';
+import { invalidateNavBadges } from '@/hooks/useNavBadges';
 import { notificationLink } from '@/lib/notificationLink';
 import { toast } from 'sonner';
 
@@ -12,6 +13,23 @@ export default function useRealtimeNotifications() {
   const { member } = useCurrentMember();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+
+  // iOS (especially installed-to-home-screen) freezes the app when hidden:
+  // the realtime socket dies and cached counts go stale. When the app wakes,
+  // refetch every badge source immediately and rebuild the subscription
+  // (bumping `wake` re-runs the channel effect with fresh auth).
+  const [wake, setWake] = useState(0);
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['unread-messages'] });
+      invalidateNavBadges(queryClient);
+      setWake((w) => w + 1);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [queryClient]);
 
   useEffect(() => {
     if (!member?.id) return;
@@ -58,5 +76,5 @@ export default function useRealtimeNotifications() {
       cancelled = true;
       if (channel) supabase.removeChannel(channel);
     };
-  }, [member?.id, queryClient, navigate]);
+  }, [member?.id, queryClient, navigate, wake]);
 }
