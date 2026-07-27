@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useCurrentMember } from '@/hooks/useCurrentMember';
 import { useUiPrefs } from '@/hooks/useUiPrefs';
+import useUnreadMessages from '@/hooks/useUnreadMessages';
 import { useAuth } from '@/lib/AuthContext';
 import {
   visibleGroupsFor, footerNavItems, isPathActive, activeGroupLabel,
@@ -23,6 +24,7 @@ export default function MobileMenu({ open, onClose }) {
   const { logout } = useAuth();
 
   const groups = visibleGroupsFor({ isManager, isAdmin });
+  const unreadMessages = useUnreadMessages();
 
   // DB-backed favorites — same row the desktop sidebar uses, so pins sync
   const { favorites, setFavorites } = useUiPrefs();
@@ -67,6 +69,11 @@ export default function MobileMenu({ open, onClose }) {
         >
           <item.icon className="w-5 h-5 shrink-0" style={active && color ? { color } : undefined} />
           <span className="truncate">{item.label}</span>
+          {item.path === '/messages' && unreadMessages > 0 && (
+            <span className="ml-auto min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-semibold inline-flex items-center justify-center">
+              {unreadMessages}
+            </span>
+          )}
         </Link>
         <button
           type="button"

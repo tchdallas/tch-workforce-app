@@ -84,7 +84,10 @@ export default function Messages() {
   // mark read when opening a conversation
   useEffect(() => {
     if (!selectedId || !myId) return;
-    markRead(selectedId, myId).then(() => qc.invalidateQueries({ queryKey: ['conversations', myId] }));
+    markRead(selectedId, myId).then(() => {
+      qc.invalidateQueries({ queryKey: ['conversations', myId] });
+      qc.invalidateQueries({ queryKey: ['unread-messages'] }); // clear the nav bubble
+    });
   }, [selectedId, myId, messages.length]); // eslint-disable-line
 
   // keep scrolled to newest

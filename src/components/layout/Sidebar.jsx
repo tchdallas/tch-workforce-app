@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useCurrentMember } from '@/hooks/useCurrentMember';
 import { useUiPrefs } from '@/hooks/useUiPrefs';
+import useUnreadMessages from '@/hooks/useUnreadMessages';
 import { useAuth } from '@/lib/AuthContext';
 import {
   visibleGroupsFor, footerNavItems, isPathActive, activeGroupLabel,
@@ -24,6 +25,7 @@ export default function Sidebar({ collapsed, setCollapsed }) {
   const { logout } = useAuth();
 
   const groups = visibleGroupsFor({ isManager, isAdmin });
+  const unreadMessages = useUnreadMessages();
 
   // Favorites — per member, pinned to a section at the very top.
   // Stored in the DB (useUiPrefs) so they follow the person across devices.
@@ -74,8 +76,18 @@ export default function Sidebar({ collapsed, setCollapsed }) {
               : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'
           )}
         >
-          <item.icon className="w-5 h-5 shrink-0" style={active && color ? { color } : undefined} />
+          <span className="relative shrink-0">
+            <item.icon className="w-5 h-5" style={active && color ? { color } : undefined} />
+            {collapsed && item.path === '/messages' && unreadMessages > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-primary" />
+            )}
+          </span>
           {!collapsed && <span className="truncate">{item.label}</span>}
+          {!collapsed && item.path === '/messages' && unreadMessages > 0 && (
+            <span className="ml-auto min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-semibold inline-flex items-center justify-center">
+              {unreadMessages}
+            </span>
+          )}
         </Link>
         {!collapsed && (
           <button
