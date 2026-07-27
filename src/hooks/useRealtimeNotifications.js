@@ -32,6 +32,10 @@ export default function useRealtimeNotifications() {
           },
           (payload) => {
             queryClient.invalidateQueries({ queryKey: ['notifications'] });
+            // message notifications also bump the Messages nav bubble live
+            if (payload.new.type === 'message_received') {
+              queryClient.invalidateQueries({ queryKey: ['unread-messages'] });
+            }
             toast(payload.new.title, { description: payload.new.message, duration: 6000 });
           }
         )

@@ -11,7 +11,8 @@ Staff scheduling + operations app for **Texas Card House**, a 24/7 poker room wi
 ## Run & deploy
 - Install: `npm install`  ·  Dev server: `npm run dev` (http://localhost:5173)
 - Build check: `npm run build`
-- **Deploy (production):** `npx vercel deploy --prod --yes` → https://tch-workforce.vercel.app. Deploys go through the **Vercel CLI, not GitHub** — pushing to GitHub does NOT deploy.
+- **Deploy (production):** push the `production` branch — Vercel is connected to the GitHub repo and auto-deploys it to https://tch-workforce.vercel.app. Release = `git push origin main:production` from any machine. Do NOT use `npx vercel deploy` anymore (it bypasses git and strands work on one machine — that's how the July 2026 divergence happened).
+- **Branch model (Victor works from two machines):** `main` = shared trunk, push/pull freely to sync devices — pushing main does NOT deploy. `production` = what's live; only push it when releasing. Start every session with `git pull`; end every session with commit + push to main.
 - **Apply a DB migration:** `npx supabase db push -p <DB_PASSWORD>` (password is not in the repo — ask Victor).
 
 ## Secrets & environment

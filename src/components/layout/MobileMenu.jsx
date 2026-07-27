@@ -7,6 +7,7 @@ import { useCurrentMember } from '@/hooks/useCurrentMember';
 import { useUiPrefs } from '@/hooks/useUiPrefs';
 import { useNavBadges } from '@/hooks/useNavBadges';
 import NavBadge from './NavBadge';
+import useUnreadMessages from '@/hooks/useUnreadMessages';
 import { useAuth } from '@/lib/AuthContext';
 import {
   visibleGroupsFor, footerNavItems, isPathActive, activeGroupLabel,
@@ -25,6 +26,7 @@ export default function MobileMenu({ open, onClose }) {
   const { logout } = useAuth();
 
   const groups = visibleGroupsFor({ isManager, isAdmin });
+  const unreadMessages = useUnreadMessages();
 
   // DB-backed favorites — same row the desktop sidebar uses, so pins sync
   const { favorites, setFavorites } = useUiPrefs();
@@ -72,6 +74,11 @@ export default function MobileMenu({ open, onClose }) {
           <span className="truncate">{item.label}</span>
           {/* ml-auto lands it inside the pr-9 gutter, clear of the favourite star */}
           <NavBadge count={badges[item.path]} className="ml-auto" />
+          {item.path === '/messages' && unreadMessages > 0 && (
+            <span className="ml-auto min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-semibold inline-flex items-center justify-center">
+              {unreadMessages}
+            </span>
+          )}
         </Link>
         <button
           type="button"

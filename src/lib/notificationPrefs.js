@@ -12,6 +12,10 @@ export const NOTIF_EVENTS = [
   { key: 'upcoming_shift', label: 'Shift reminders', desc: 'A heads-up before your shift starts' },
   { key: 'shift_offered', label: 'Open shifts', desc: 'Open shifts you qualify for' },
   { key: 'request_status', label: 'Time-off decisions', desc: 'When a request is approved or denied' },
+  { key: 'message_received', label: 'Messages', desc: 'New messages in your conversations (muted threads never notify)' },
+  { key: 'announcement', label: 'Announcements', desc: 'New announcements posted to you' },
+  // deliberately NOT listed (cannot be turned off): attendance points,
+  // discipline documents, appeal decisions — HR-critical notices
 ];
 
 // Lead-time options for shift reminders (minutes).
