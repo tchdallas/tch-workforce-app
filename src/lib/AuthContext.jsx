@@ -91,6 +91,13 @@ export const AuthProvider = ({ children }) => {
       if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'USER_UPDATED') {
         applySession(session);
       }
+      // Access tokens expire hourly. The realtime socket keeps the OLD token
+      // unless we hand it the new one — without this, live toasts/badges
+      // silently died on any tab open longer than an hour (RLS filters every
+      // event once the socket's claims go stale).
+      if ((event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') && session) {
+        supabase.realtime.setAuth(session.access_token);
+      }
     });
 
     return () => {

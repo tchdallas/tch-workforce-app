@@ -1,7 +1,9 @@
 import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/api/supabase';
 import { useCurrentMember } from '@/hooks/useCurrentMember';
+import { notificationLink } from '@/lib/notificationLink';
 import { toast } from 'sonner';
 
 // Live in-app notifications: subscribes to the member's notification stream
@@ -9,6 +11,7 @@ import { toast } from 'sonner';
 export default function useRealtimeNotifications() {
   const { member } = useCurrentMember();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!member?.id) return;
@@ -36,7 +39,17 @@ export default function useRealtimeNotifications() {
             if (payload.new.type === 'message_received') {
               queryClient.invalidateQueries({ queryKey: ['unread-messages'] });
             }
-            toast(payload.new.title, { description: payload.new.message, duration: 6000 });
+            // realtime payloads carry raw snake_case columns
+            const link = notificationLink({
+              relatedEntityType: payload.new.related_entity_type,
+              relatedEntityId: payload.new.related_entity_id,
+              type: payload.new.type,
+            });
+            toast(payload.new.title, {
+              description: payload.new.message,
+              duration: 6000,
+              ...(link ? { action: { label: 'View', onClick: () => navigate(link) } } : {}),
+            });
           }
         )
         .subscribe();
@@ -45,5 +58,5 @@ export default function useRealtimeNotifications() {
       cancelled = true;
       if (channel) supabase.removeChannel(channel);
     };
-  }, [member?.id, queryClient]);
+  }, [member?.id, queryClient, navigate]);
 }

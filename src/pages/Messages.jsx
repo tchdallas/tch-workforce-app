@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/api/supabase';
 import { useCurrentMember } from '@/hooks/useCurrentMember';
@@ -34,6 +35,16 @@ export default function Messages() {
   const [selectedId, setSelectedId] = useState(null);
   const { data: messages = [] } = useMessages(selectedId);
   const selected = conversations.find(c => c.id === selectedId);
+
+  // deep link: /messages?c=<conversationId> (notification click-throughs)
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const c = searchParams.get('c');
+    if (!c || !conversations.length) return;
+    if (conversations.some(x => x.id === c)) setSelectedId(c);
+    setSearchParams({}, { replace: true }); // one-shot: don't re-select on back-nav
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, conversations.length]);
 
   const [newDmOpen, setNewDmOpen] = useState(false);
   const [newGroupOpen, setNewGroupOpen] = useState(false);

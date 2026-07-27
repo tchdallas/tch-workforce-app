@@ -1,11 +1,13 @@
 ﻿import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { invalidateNavBadges } from '@/hooks/useNavBadges';
+import { notificationLink } from '@/lib/notificationLink';
 import { base44 } from '@/api/base44Client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Bell, Check, CheckCheck } from 'lucide-react';
+import { Bell, Check, CheckCheck, ArrowRight } from 'lucide-react';
 import PageHeader from '@/components/common/PageHeader';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -13,6 +15,7 @@ import { cn } from '@/lib/utils';
 
 export default function Notifications() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const { data: notifications = [] } = useQuery({
     queryKey: ['all-notifications'],
@@ -89,8 +92,18 @@ export default function Notifications() {
             <p className="text-sm text-muted-foreground">No notifications yet</p>
           </div>
         )}
-        {notifications.map(n => (
-          <Card key={n.id} className={cn('transition-colors', isNew(n) && 'bg-primary/5 border-primary/20')}>
+        {notifications.map(n => {
+          const link = notificationLink(n);
+          return (
+          <Card
+            key={n.id}
+            onClick={link ? () => { if (!n.readStatus) markRead.mutate(n.id); navigate(link); } : undefined}
+            className={cn(
+              'transition-colors',
+              isNew(n) && 'bg-primary/5 border-primary/20',
+              link && 'cursor-pointer hover:bg-accent/40'
+            )}
+          >
             <CardContent className="p-4 flex items-start gap-3">
               {isNew(n) ? <div className="w-2 h-2 rounded-full bg-primary mt-1.5 shrink-0" /> : <div className="w-2 h-2 shrink-0" />}
               <div className="flex-1 min-w-0">
@@ -104,10 +117,12 @@ export default function Notifications() {
                       <Badge className={`text-[9px] border-0 ${typeColors[n.type] || typeColors.info}`}>{n.type}</Badge>
                     )}
                     {!n.readStatus && (
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => markRead.mutate(n.id)}>
+                      <Button size="icon" variant="ghost" className="h-7 w-7"
+                              onClick={(e) => { e.stopPropagation(); markRead.mutate(n.id); }}>
                         <Check className="w-3.5 h-3.5" />
                       </Button>
                     )}
+                    {notificationLink(n) && <ArrowRight className="w-3.5 h-3.5 text-muted-foreground mt-1.5" />}
                   </div>
                 </div>
                 {n.created_date && (
@@ -118,7 +133,8 @@ export default function Notifications() {
               </div>
             </CardContent>
           </Card>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
