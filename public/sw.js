@@ -32,7 +32,10 @@ self.addEventListener('push', (event) => {
   const options = {
     body: payload.body || '',
     icon: '/icons/icon-192.png',
-    badge: '/icons/icon-192.png',
+    // Android's status bar renders ONLY the badge's alpha silhouette — a
+    // full-color icon here shows as a white square. This is the chip mark
+    // as white-on-transparent, so the suits read as cutouts.
+    badge: '/icons/badge-96.png',
     // tag collapses repeats of the same thing (e.g. a re-sent shift reminder)
     // instead of stacking five identical banners
     tag: payload.tag || undefined,
