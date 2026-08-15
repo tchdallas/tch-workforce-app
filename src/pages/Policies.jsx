@@ -128,6 +128,7 @@ export default function Policies() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <h3 className="font-semibold text-sm">{p.title}</h3>
                           {p.status === 'draft' && <Badge variant="secondary" className="text-[10px]">Draft</Badge>}
+                          {p.status === 'pending_approval' && <Badge className="text-[10px] border-0 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">Pending approval</Badge>}
                           {p.status === 'archived' && <Badge variant="outline" className="text-[10px]">Archived</Badge>}
                           {needsMe.has(p.id) && <Badge className="text-[10px]">Action needed</Badge>}
                         </div>

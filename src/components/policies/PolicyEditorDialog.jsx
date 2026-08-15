@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCurrentMember } from '@/hooks/useCurrentMember';
 import { useRoles, useLocations } from '@/lib/useAppData';
 import {
-  savePolicy, publishPolicy, uploadPolicyDocument, usePolicyDocuments, removePolicyDocument,
+  savePolicy, publishPolicy, submitPolicy, uploadPolicyDocument, usePolicyDocuments, removePolicyDocument,
   usePolicyCategories, createPolicyCategory,
 } from '@/lib/policies';
 import { Button } from '@/components/ui/button';
@@ -22,7 +22,9 @@ const MAX_FILE_MB = 25;
 
 export default function PolicyEditorDialog({ open, onClose, policy, onSaved }) {
   const qc = useQueryClient();
-  const { scopeLocations } = useCurrentMember();
+  const { scopeLocations, isAdmin } = useCurrentMember();
+  // location_admin+ publish directly; managers submit for approval
+  const canPublishDirectly = isAdmin;
   const { data: roles = [] } = useRoles();
   const { data: locations = [] } = useLocations();
   const { data: existingDocs = [] } = usePolicyDocuments(policy?.id);
@@ -91,7 +93,8 @@ export default function PolicyEditorDialog({ open, onClose, policy, onSaved }) {
 
   const valid = title.trim() && roleIds.length > 0 && locationIds.length > 0;
 
-  const persist = async (thenPublish) => {
+  // action: 'draft' | 'publish' | 'submit'
+  const persist = async (action) => {
     setSaving(true);
     try {
       const policyId = await savePolicy({
@@ -103,12 +106,17 @@ export default function PolicyEditorDialog({ open, onClose, policy, onSaved }) {
       for (const f of pendingFiles) {
         await uploadPolicyDocument(policyId, f);
       }
-      if (thenPublish) await publishPolicy(policyId);
+      if (action === 'publish') await publishPolicy(policyId);
+      else if (action === 'submit') await submitPolicy(policyId);
 
       qc.invalidateQueries({ queryKey: ['policies'] });
       qc.invalidateQueries({ queryKey: ['policy', policyId] });
       qc.invalidateQueries({ queryKey: ['policy-documents', policyId] });
-      toast.success(thenPublish ? 'Policy published' : 'Draft saved');
+      toast.success(
+        action === 'publish' ? 'Policy published'
+          : action === 'submit' ? 'Submitted for approval'
+          : 'Draft saved'
+      );
       onSaved?.(policyId);
       onClose();
     } catch (e) {
@@ -260,11 +268,11 @@ export default function PolicyEditorDialog({ open, onClose, policy, onSaved }) {
 
         <DialogFooter className="gap-2 sm:gap-2">
           <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button variant="outline" disabled={!valid || saving} onClick={() => persist(false)}>
+          <Button variant="outline" disabled={!valid || saving} onClick={() => persist('draft')}>
             Save draft
           </Button>
-          <Button disabled={!valid || saving} onClick={() => persist(true)}>
-            {saving ? 'Saving…' : 'Publish'}
+          <Button disabled={!valid || saving} onClick={() => persist(canPublishDirectly ? 'publish' : 'submit')}>
+            {saving ? 'Saving…' : (canPublishDirectly ? 'Publish' : 'Submit for approval')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -277,6 +285,8 @@ function friendlyError(e) {
   if (m.includes('at least one role')) return 'Choose at least one role this policy applies to.';
   if (m.includes('at least one club')) return 'Choose at least one club this policy applies at.';
   if (m.includes('do not manage')) return "You can only publish to clubs you manage.";
+  if (m.includes('location admins and above may publish')) return 'Only location admins and above publish directly — this was submitted for approval instead.';
+  if (m.includes('only drafts can be submitted')) return 'This policy is already submitted for approval.';
   if (m.includes('managers and above')) return 'Only managers and above can publish policies.';
   if (m.toLowerCase().includes('row-level security') || m.includes('policy')) {
     return "You don't have permission to save that.";

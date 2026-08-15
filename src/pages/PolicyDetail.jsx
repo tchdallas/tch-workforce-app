@@ -7,7 +7,7 @@ import {
   usePolicy, usePolicyDocuments, usePolicyUpdates, useMyPolicyAcks,
   usePolicyAckStatus, usePolicyUpdateAckStatus,
   acknowledgePolicy, acknowledgePolicyUpdate, policyDocumentUrl, archivePolicy,
-  usePolicyCategories,
+  restorePolicy, publishPolicy, rejectPolicy, usePolicyCategories,
 } from '@/lib/policies';
 import PageHeader from '@/components/common/PageHeader';
 import PolicyThread from '@/components/policies/PolicyThread';
@@ -17,11 +17,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   ScrollText, FileText, Check, Pencil, Megaphone, ChevronDown,
-  CheckCircle2, Circle, Archive, ArrowLeft,
+  CheckCircle2, Circle, Archive, ArrowLeft, Undo2, RotateCcw,
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
@@ -40,6 +41,9 @@ export default function PolicyDetail() {
   const { data: categories = [] } = usePolicyCategories();
   const [editorOpen, setEditorOpen] = useState(false);
   const [updateOpen, setUpdateOpen] = useState(false);
+  const [sendingBack, setSendingBack] = useState(false); // shows the note box
+  const [rejectNote, setRejectNote] = useState('');
+  const [busy, setBusy] = useState(false);
 
   const roleName = useMemo(() => Object.fromEntries(roles.map(r => [r.id, r.name])), [roles]);
   const locationName = useMemo(() => Object.fromEntries(locations.map(l => [l.id, l.name])), [locations]);
@@ -76,13 +80,47 @@ export default function PolicyDetail() {
     } catch (e) { toast.error(e.message || 'Could not open that file'); }
   };
 
+  const refetch = () => {
+    qc.invalidateQueries({ queryKey: ['policies'] });
+    qc.invalidateQueries({ queryKey: ['policy', id] });
+    qc.invalidateQueries({ queryKey: ['policy-acks-outstanding'] });
+  };
+
   const archive = async () => {
     try {
       await archivePolicy(id);
-      qc.invalidateQueries({ queryKey: ['policies'] });
-      qc.invalidateQueries({ queryKey: ['policy', id] });
+      refetch();
       toast.success('Policy archived');
     } catch (e) { toast.error(e.message || 'Could not archive'); }
+  };
+
+  const restore = async () => {
+    try {
+      await restorePolicy(id);
+      refetch();
+      toast.success('Policy restored as a draft');
+    } catch (e) { toast.error(e.message || 'Could not restore'); }
+  };
+
+  const approve = async () => {
+    setBusy(true);
+    try {
+      await publishPolicy(id);
+      refetch();
+      toast.success('Approved & published');
+    } catch (e) { toast.error(e.message || 'Could not publish'); }
+    finally { setBusy(false); }
+  };
+
+  const sendBack = async () => {
+    setBusy(true);
+    try {
+      await rejectPolicy(id, rejectNote.trim());
+      setSendingBack(false); setRejectNote('');
+      refetch();
+      toast.success('Sent back to the author');
+    } catch (e) { toast.error(e.message || 'Could not send back'); }
+    finally { setBusy(false); }
   };
 
   const unackedUpdates = updates.filter(
@@ -120,6 +158,9 @@ export default function PolicyDetail() {
 
       <div className="flex items-center gap-2 flex-wrap mb-3">
         {policy.status === 'draft' && <Badge variant="secondary">Draft — not visible to the team yet</Badge>}
+        {policy.status === 'pending_approval' && (
+          <Badge className="border-0 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">Pending approval</Badge>
+        )}
         {policy.status === 'archived' && <Badge variant="outline">Archived</Badge>}
         {policy.published_at && (
           <span className="text-[11px] text-muted-foreground">
@@ -127,6 +168,44 @@ export default function PolicyDetail() {
           </span>
         )}
       </div>
+
+      {policy.status === 'pending_approval' && (
+        <Card className="p-3 mb-3 border-amber-300/60 ring-1 ring-amber-200/40">
+          {isAdmin ? (
+            sendingBack ? (
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Send back to the author</p>
+                <Textarea
+                  rows={2}
+                  placeholder="What needs to change? (optional — the author is notified)"
+                  value={rejectNote}
+                  onChange={e => setRejectNote(e.target.value)}
+                />
+                <div className="flex gap-2 justify-end">
+                  <Button size="sm" variant="ghost" onClick={() => { setSendingBack(false); setRejectNote(''); }}>Cancel</Button>
+                  <Button size="sm" variant="outline" disabled={busy} onClick={sendBack}>Send back</Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <p className="text-sm font-medium">Submitted for approval — review and publish, or send it back.</p>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setSendingBack(true)} disabled={busy}>
+                    <Undo2 className="w-3.5 h-3.5" /> Send back
+                  </Button>
+                  <Button size="sm" className="gap-1.5" onClick={approve} disabled={busy}>
+                    <Check className="w-4 h-4" /> Approve & publish
+                  </Button>
+                </div>
+              </div>
+            )
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Submitted — waiting for a location admin to approve it. It isn't visible to the team yet.
+            </p>
+          )}
+        </Card>
+      )}
 
       {needsPolicyAck && (
         <Card className="p-3 mb-3 border-primary/60 ring-1 ring-primary/20">
@@ -192,6 +271,13 @@ export default function PolicyDetail() {
             <div className="pt-2">
               <Button size="sm" variant="outline" className="gap-1.5 text-muted-foreground" onClick={archive}>
                 <Archive className="w-3.5 h-3.5" /> Archive this policy
+              </Button>
+            </div>
+          )}
+          {isAdmin && policy.status === 'archived' && (
+            <div className="pt-2">
+              <Button size="sm" variant="outline" className="gap-1.5" onClick={restore}>
+                <RotateCcw className="w-3.5 h-3.5" /> Restore (back to draft)
               </Button>
             </div>
           )}

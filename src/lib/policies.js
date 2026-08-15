@@ -300,13 +300,32 @@ export async function savePolicy({ id, title, categoryIds, summary, body, requir
 }
 
 // Publishes (or re-publishes) — snapshots recipients when acknowledgment is on.
+// location_admin+ only; managers use submitPolicy instead.
 export async function publishPolicy(policyId) {
   const { error } = await supabase.rpc('publish_policy', { pid: policyId });
   if (error) throw error;
 }
 
+// A manager sends a draft up for approval (status -> pending_approval).
+export async function submitPolicy(policyId) {
+  const { error } = await supabase.rpc('submit_policy', { pid: policyId });
+  if (error) throw error;
+}
+
+// A location_admin+ sends a submitted policy back to draft with a note.
+export async function rejectPolicy(policyId, note) {
+  const { error } = await supabase.rpc('reject_policy', { pid: policyId, p_note: note || null });
+  if (error) throw error;
+}
+
 export async function archivePolicy(policyId) {
   const { error } = await supabase.from('policies').update({ status: 'archived' }).eq('id', policyId);
+  if (error) throw error;
+}
+
+// Un-archive: back to draft so it can be reviewed and re-published.
+export async function restorePolicy(policyId) {
+  const { error } = await supabase.from('policies').update({ status: 'draft' }).eq('id', policyId);
   if (error) throw error;
 }
 
