@@ -5,14 +5,26 @@ import { useRoles, useLocations } from '@/lib/useAppData';
 import { usePolicies, useOutstandingPolicyAcks, usePolicyCategories } from '@/lib/policies';
 import PageHeader from '@/components/common/PageHeader';
 import PolicyEditorDialog from '@/components/policies/PolicyEditorDialog';
+import FilterGroup from '@/components/common/FilterGroup';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { ScrollText, Plus, Search, ChevronRight, AlertCircle } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ScrollText, Plus, Search, ChevronRight, AlertCircle, Filter, ArrowUpDown, X, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+const STATUS_META = {
+  published: 'Published',
+  draft: 'Draft',
+  pending_approval: 'Pending approval',
+  archived: 'Archived',
+};
+// Everything except archived — the default view hides archived policies.
+const DEFAULT_STATUS = ['published', 'draft', 'pending_approval'];
+const STATUS_ORDER = ['published', 'pending_approval', 'draft', 'archived'];
+
 export default function Policies() {
-  const { member, isManager } = useCurrentMember();
+  const { member, isManager, scopeLocations } = useCurrentMember();
   const { data: policies = [], isFetched } = usePolicies();
   const { data: roles = [] } = useRoles();
   const { data: locations = [] } = useLocations();
@@ -21,14 +33,34 @@ export default function Policies() {
   const [search, setSearch] = useState('');
   const [editorOpen, setEditorOpen] = useState(false);
 
-  // category order follows the managed list, so headings read in the order
-  // someone deliberately arranged rather than alphabetically by accident
+  // filters + sort
+  const [statusFilter, setStatusFilter] = useState(DEFAULT_STATUS);
+  const [categoryFilter, setCategoryFilter] = useState([]);
+  const [locationFilter, setLocationFilter] = useState([]);
+  const [sortBy, setSortBy] = useState('title'); // title | updated
+  const [sortDir, setSortDir] = useState('asc');
+  const toggleIn = (setter) => (v) =>
+    setter((prev) => (prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]));
+
   const categoryName = useMemo(() => Object.fromEntries(categories.map(c => [c.id, c.name])), [categories]);
   const categoryRank = useMemo(() => Object.fromEntries(categories.map((c, i) => [c.name, i])), [categories]);
   const roleName = useMemo(() => Object.fromEntries(roles.map(r => [r.id, r.name])), [roles]);
   const locationName = useMemo(() => Object.fromEntries(locations.map(l => [l.id, l.name])), [locations]);
 
-  // Which policies still want something from me — drives the "Action needed" flag
+  // Filter options built from what's actually here (so team members, who only
+  // ever see published policies, don't get a pile of irrelevant status options).
+  const presentStatuses = useMemo(() => new Set(policies.map(p => p.status)), [policies]);
+  const statusOptions = STATUS_ORDER
+    .filter(s => presentStatuses.has(s))
+    .map(s => ({ value: s, label: STATUS_META[s] }));
+  const usedCategoryIds = useMemo(() => {
+    const s = new Set();
+    policies.forEach(p => (p.categoryIds || []).forEach(id => s.add(id)));
+    return s;
+  }, [policies]);
+  const categoryOptions = categories.filter(c => usedCategoryIds.has(c.id)).map(c => ({ value: c.id, label: c.name }));
+  const locationOptions = scopeLocations(locations.filter(l => l.status === 'active')).map(l => ({ value: l.id, label: l.name }));
+
   const needsMe = useMemo(() => {
     const s = new Set();
     (outstanding?.policies || []).forEach(p => s.add(p.policyId));
@@ -37,16 +69,25 @@ export default function Policies() {
   }, [outstanding]);
 
   const term = search.trim().toLowerCase();
-  const visible = term
-    ? policies.filter(p =>
-        p.title.toLowerCase().includes(term)
-        || (p.categoryIds || []).some(id => (categoryName[id] || '').toLowerCase().includes(term))
-        || (p.summary || '').toLowerCase().includes(term)
-        || (p.body || '').toLowerCase().includes(term))
-    : policies;
+  const visible = useMemo(() => policies.filter(p => {
+    if (statusFilter.length && !statusFilter.includes(p.status)) return false;
+    if (categoryFilter.length && !(p.categoryIds || []).some(id => categoryFilter.includes(id))) return false;
+    if (locationFilter.length && !(p.locationIds || []).some(id => locationFilter.includes(id))) return false;
+    if (term) {
+      const hay = `${p.title} ${(p.categoryIds || []).map(id => categoryName[id] || '').join(' ')} ${p.summary || ''} ${p.body || ''}`.toLowerCase();
+      if (!hay.includes(term)) return false;
+    }
+    return true;
+  }), [policies, statusFilter, categoryFilter, locationFilter, term, categoryName]);
 
-  // Group by category, uncategorised last. A policy in several categories is
-  // listed under each — that's the point of allowing more than one.
+  const sortItems = (arr) => {
+    const val = (p) => sortBy === 'updated' ? (p.updated_at || p.created_at || '') : p.title.toLowerCase();
+    const s = [...arr].sort((a, b) => String(val(a)).localeCompare(String(val(b)), undefined, { sensitivity: 'base', numeric: true }));
+    return sortDir === 'asc' ? s : s.reverse();
+  };
+
+  // Group by category, uncategorised last; a policy in several categories appears
+  // under each. Items within a group follow the chosen sort.
   const groups = useMemo(() => {
     const m = new Map();
     visible.forEach(p => {
@@ -57,20 +98,24 @@ export default function Policies() {
         m.get(key).push(p);
       });
     });
-    return [...m.entries()].sort(([a], [b]) => {
-      if (a === 'Uncategorised') return 1;
-      if (b === 'Uncategorised') return -1;
-      const ra = categoryRank[a] ?? Number.MAX_SAFE_INTEGER;
-      const rb = categoryRank[b] ?? Number.MAX_SAFE_INTEGER;
-      return ra !== rb ? ra - rb : a.localeCompare(b);
-    });
-  }, [visible, categoryName, categoryRank]);
+    return [...m.entries()]
+      .map(([k, items]) => [k, sortItems(items)])
+      .sort(([a], [b]) => {
+        if (a === 'Uncategorised') return 1;
+        if (b === 'Uncategorised') return -1;
+        const ra = categoryRank[a] ?? Number.MAX_SAFE_INTEGER;
+        const rb = categoryRank[b] ?? Number.MAX_SAFE_INTEGER;
+        return ra !== rb ? ra - rb : a.localeCompare(b);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, categoryName, categoryRank, sortBy, sortDir]);
+
+  const statusChanged = statusFilter.length !== DEFAULT_STATUS.length || !DEFAULT_STATUS.every(s => statusFilter.includes(s));
+  const activeFilterCount = (statusChanged ? 1 : 0) + (categoryFilter.length ? 1 : 0) + (locationFilter.length ? 1 : 0);
 
   return (
     <div className="max-w-3xl mx-auto">
       <PageHeader title="Policies & Procedures" subtitle="How we do things, and what changed recently">
-        {/* strict !!member: isManager is optimistically true while the member row
-            loads, which would flash "New policy" at a dealer */}
         {!!member && isManager && (
           <Button size="sm" className="gap-1.5" onClick={() => setEditorOpen(true)}>
             <Plus className="w-4 h-4" /> New policy
@@ -89,14 +134,63 @@ export default function Policies() {
         </div>
       )}
 
-      <div className="flex items-center gap-1.5 h-10 px-3 rounded-md border border-input mb-4">
-        <Search className="w-4 h-4 text-muted-foreground shrink-0" />
-        <input
-          className="bg-transparent outline-none flex-1 text-sm placeholder:text-muted-foreground"
-          placeholder="Search policies…"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-        />
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <div className="flex items-center gap-1.5 h-9 px-3 rounded-md border border-input flex-1 min-w-[180px] max-w-sm">
+          <Search className="w-4 h-4 text-muted-foreground shrink-0" />
+          <input
+            className="bg-transparent outline-none flex-1 text-sm placeholder:text-muted-foreground"
+            placeholder="Search policies…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
+
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button size="sm" variant="outline" className="gap-1.5 shrink-0">
+              <Filter className="w-4 h-4" /> Filter
+              {activeFilterCount > 0 && (
+                <span className="text-[10px] bg-primary text-primary-foreground rounded-full px-1.5 leading-tight">{activeFilterCount}</span>
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-64 p-0">
+            <div className="max-h-[60vh] overflow-y-auto p-3 space-y-3">
+              <FilterGroup title="Status" options={statusOptions} selected={statusFilter} onToggle={toggleIn(setStatusFilter)} />
+              <FilterGroup title="Category" options={categoryOptions} selected={categoryFilter} onToggle={toggleIn(setCategoryFilter)} />
+              <FilterGroup title="Club" options={locationOptions} selected={locationFilter} onToggle={toggleIn(setLocationFilter)} />
+            </div>
+            {activeFilterCount > 0 && (
+              <div className="border-t border-border p-2">
+                <Button variant="ghost" size="sm" className="w-full gap-1.5 text-xs"
+                  onClick={() => { setStatusFilter(DEFAULT_STATUS); setCategoryFilter([]); setLocationFilter([]); }}>
+                  <X className="w-3.5 h-3.5" /> Reset filters
+                </Button>
+              </div>
+            )}
+          </PopoverContent>
+        </Popover>
+
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button size="sm" variant="outline" className="gap-1.5 shrink-0">
+              <ArrowUpDown className="w-4 h-4" /> Sort
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-44 p-1">
+            {[['title', 'Title'], ['updated', 'Recently updated']].map(([v, l]) => (
+              <button key={v} type="button" onClick={() => setSortBy(v)}
+                className={cn('w-full flex items-center justify-between px-2 py-1.5 text-sm rounded hover:bg-muted', sortBy === v && 'text-primary font-medium')}>
+                {l} {sortBy === v && <Check className="w-3.5 h-3.5" />}
+              </button>
+            ))}
+            <div className="border-t border-border my-1" />
+            <button type="button" onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
+              className="w-full text-left px-2 py-1.5 text-sm rounded hover:bg-muted">
+              {sortDir === 'asc' ? 'Ascending ↑' : 'Descending ↓'}
+            </button>
+          </PopoverContent>
+        </Popover>
       </div>
 
       {isFetched && policies.length === 0 && (
@@ -107,7 +201,9 @@ export default function Policies() {
       )}
 
       {isFetched && policies.length > 0 && visible.length === 0 && (
-        <p className="text-center py-10 text-sm text-muted-foreground">Nothing matches “{search}”.</p>
+        <p className="text-center py-10 text-sm text-muted-foreground">
+          {term ? `Nothing matches “${search}”.` : 'No policies match your filters.'}
+        </p>
       )}
 
       <div className="space-y-5">
