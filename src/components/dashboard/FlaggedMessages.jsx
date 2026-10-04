@@ -25,8 +25,10 @@ export function useFlagInboxCount() {
 
 export default function FlaggedMessages() {
   const qc = useQueryClient();
-  const { member, isAdmin } = useCurrentMember();
-  const { data: flags = [] } = useOpenFlags(isAdmin);
+  const { member, isAdmin, outranks } = useCurrentMember();
+  const { data: allFlags = [] } = useOpenFlags(isAdmin);
+  // the server already hides flags on my own messages; this is belt-and-braces
+  const flags = useMemo(() => allFlags.filter(f => f.messages?.sender_team_member_id !== member?.id), [allFlags, member?.id]);
   const { data: roles = [] } = useRoles();
   const { data: locations = [] } = useLocations();
   const [busyId, setBusyId] = useState(null);
@@ -42,6 +44,7 @@ export default function FlaggedMessages() {
     queryFn: () => base44.entities.TeamMember.filter({ id: { $in: peopleIds } }),
     placeholderData: [],
   });
+  const levelOf = (id) => people.find(x => x.id === id)?.permissionLevel;
   const nameOf = (id) => {
     const p = people.find(x => x.id === id);
     return p ? `${p.preferredName || p.firstName} ${p.lastName}` : 'a team member';
@@ -84,6 +87,8 @@ export default function FlaggedMessages() {
       {flags.map(f => {
         const msg = f.messages;
         const busy = busyId === f.id;
+        // same hierarchy as discipline: you only mute people ranked below you
+        const canMuteSender = !!msg && outranks(levelOf(msg.sender_team_member_id));
         return (
           <div key={f.id} className="p-3 rounded-lg border border-amber-300 dark:border-amber-700 space-y-2">
             <div className="flex items-start gap-3">
@@ -109,9 +114,11 @@ export default function FlaggedMessages() {
               <Button size="sm" variant="outline" className="h-7 text-xs gap-1" disabled={busy || !!msg?.deleted_at} onClick={() => act(f, 'removed')}>
                 <Trash2 className="w-3 h-3" /> Remove message
               </Button>
-              <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-destructive border-destructive/40" disabled={busy} onClick={() => act(f, 'muted')}>
-                <VolumeX className="w-3 h-3" /> Remove &amp; mute sender
-              </Button>
+              {canMuteSender && (
+                <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-destructive border-destructive/40" disabled={busy} onClick={() => act(f, 'muted')}>
+                  <VolumeX className="w-3 h-3" /> Remove &amp; mute sender
+                </Button>
+              )}
             </div>
           </div>
         );
