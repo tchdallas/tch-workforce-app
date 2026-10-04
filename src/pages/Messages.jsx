@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/api/supabase';
 import { useCurrentMember } from '@/hooks/useCurrentMember';
@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   MessageSquare, Plus, Users, Send, ChevronLeft, MoreVertical, Bell, BellOff, Ban, Hash, Trash2,
-  AtSign, Flag, Settings2, VolumeX, Volume2, UserMinus, UserPlus, ShieldAlert, Building2, ShieldOff,
+  AtSign, Flag, Settings2, VolumeX, Volume2, UserMinus, UserPlus, ShieldAlert, Building2, ShieldOff, ArrowLeftRight,
 } from 'lucide-react';
 import { format, isSameDay } from 'date-fns';
 import { toast } from 'sonner';
@@ -306,6 +306,13 @@ export default function Messages() {
             </div>
           )}
           <div className="flex-1 overflow-y-auto">
+            <Link to="/swap-board" className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-muted/50 border-b border-border/50">
+              <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 flex items-center justify-center shrink-0"><ArrowLeftRight className="w-4 h-4" /></div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">Swap Board</p>
+                <p className="text-[11px] text-muted-foreground">Pick up, give away, or trade shifts</p>
+              </div>
+            </Link>
             {conversations.length === 0 && (
               <p className="text-xs text-muted-foreground text-center py-8 px-4">No conversations yet. Start a DM to begin.</p>
             )}

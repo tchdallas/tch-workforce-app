@@ -61,6 +61,11 @@ export default function useRealtimeNotifications() {
             if (payload.new.type === 'message_flagged') {
               queryClient.invalidateQueries({ queryKey: ['message-flags'] });
             }
+            // swap board activity (post/offer/accept/decline) — refresh the tiles
+            if ((payload.new.type || '').startsWith('swap_')) {
+              queryClient.invalidateQueries({ queryKey: ['swap-posts'] });
+              queryClient.invalidateQueries({ queryKey: ['swap-replies'] });
+            }
             // my messaging mute changed — swap the composer for the banner (or back)
             if (payload.new.type === 'messaging_muted' || payload.new.type === 'messaging_unmuted') {
               queryClient.invalidateQueries({ queryKey: ['messaging-mutes'] });

@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Radio, Calendar, CalendarCheck, LayoutTemplate, HandHelping,
   ClipboardList, AlertTriangle, Clock, Trophy, Users, UserCheck, MessageSquare,
   Megaphone, BarChart3, Activity, MapPin, Shield, Target, Settings, Bell, User, MessageSquarePlus,
-  ScrollText,
+  ScrollText, ArrowLeftRight,
 } from 'lucide-react';
 
 // Each group carries an accent color so sections are scannable at a glance
@@ -21,6 +21,7 @@ export const navGroups = [
     { label: 'Templates', icon: LayoutTemplate, path: '/schedule-templates', managerOnly: true },
     { label: 'Par Levels', icon: Target, path: '/par-levels', adminOnly: true },
     { label: 'Open Shifts', icon: HandHelping, path: '/open-shifts' },
+    { label: 'Swap Board', icon: ArrowLeftRight, path: '/swap-board' },
   ] },
   { label: 'Requests', color: '#f59e0b', items: [
     { label: 'Requests', icon: ClipboardList, path: '/requests', managerOnly: true },

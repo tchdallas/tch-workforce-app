@@ -30,6 +30,7 @@ import Timesheets from '@/pages/Timesheets';
 import ParLevels from '@/pages/ParLevels';
 import Attendance from '@/pages/Attendance';
 import Messages from '@/pages/Messages';
+import SwapBoard from '@/pages/SwapBoard';
 import Announcements from '@/pages/Announcements';
 import Downs from '@/pages/Downs';
 import BugReports from '@/pages/BugReports';
@@ -73,6 +74,7 @@ const AuthenticatedApp = () => {
         <Route path="/audit-log" element={<AuditLog />} />
         <Route path="/my-schedule" element={<MySchedule />} />
         <Route path="/messages" element={<Messages />} />
+        <Route path="/swap-board" element={<SwapBoard />} />
         <Route path="/announcements" element={<Announcements />} />
         <Route path="/my-profile" element={<MyProfile />} />
         <Route path="/schedule-templates" element={<ScheduleTemplates />} />

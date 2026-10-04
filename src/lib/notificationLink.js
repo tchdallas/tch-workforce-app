@@ -25,6 +25,8 @@ export function notificationLink(n) {
       return '/bug-reports';
     case 'policy':
       return n.relatedEntityId ? `/policies/${n.relatedEntityId}` : '/policies';
+    case 'swap_post':
+      return n.relatedEntityId ? `/swap-board?p=${n.relatedEntityId}` : '/swap-board';
     default:
       break;
   }
