@@ -5,7 +5,8 @@
 export function notificationLink(n) {
   switch (n.relatedEntityType) {
     case 'conversation':
-      return `/messages?c=${n.relatedEntityId}`;
+      // flags are reviewed in the dashboard inbox (the admin may not even be in the thread)
+      return n.type === 'message_flagged' ? '/' : `/messages?c=${n.relatedEntityId}`;
     case 'announcement':
       return '/announcements';
     case 'discipline_document':

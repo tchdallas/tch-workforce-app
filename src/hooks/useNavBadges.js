@@ -5,6 +5,7 @@ import { useCurrentMember } from '@/hooks/useCurrentMember';
 import { useNotifications } from '@/lib/useAppData';
 import { useOutstandingPolicyAcks } from '@/lib/policies';
 import { useMyPendingTimeEntries } from '@/lib/timesheets';
+import { useOpenFlags } from '@/lib/messaging';
 
 // One source of truth for every count bubble, so the total on the hamburger can
 // never disagree with the numbers inside the menu.
@@ -27,7 +28,7 @@ import { useMyPendingTimeEntries } from '@/lib/timesheets';
 // thing that clears these promptly.
 export function invalidateNavBadges(qc) {
   ['notifications', 'policy-acks-outstanding', 'my-pending-time-entries',
-    'my-discipline-docs', 'nav-badges-manager']
+    'my-discipline-docs', 'nav-badges-manager', 'message-flags']
     .forEach(key => qc.invalidateQueries({ queryKey: [key] }));
 }
 
@@ -40,7 +41,7 @@ const countOf = async (table, apply) => {
 };
 
 export function useNavBadges() {
-  const { member, isManager } = useCurrentMember();
+  const { member, isManager, isAdmin } = useCurrentMember();
   const memberId = member?.id;
   // strict: isManager is optimistically true while the member row loads, which
   // would fire manager-only count queries for a dealer and log RLS noise
@@ -49,6 +50,8 @@ export function useNavBadges() {
   const { data: notifications = [] } = useNotifications(memberId);
   const { data: policyAcks } = useOutstandingPolicyAcks(memberId);
   const { data: pendingHours = [] } = useMyPendingTimeEntries(memberId);
+  // flagged messages awaiting an admin's review (same key + fetch as the dashboard inbox)
+  const { data: openFlags = [] } = useOpenFlags(isAdmin);
 
   const { data: pendingDocs = [] } = useQuery({
     queryKey: ['my-discipline-docs', memberId, 'pending'],
@@ -85,7 +88,7 @@ export function useNavBadges() {
     '/notifications': notifications.length,
     '/policies': policyCount,
     // things only the dashboard's "Needs Your Attention" can resolve
-    '/': pendingDocs.length + pendingHours.length,
+    '/': pendingDocs.length + pendingHours.length + (isAdmin ? openFlags.length : 0),
     ...(mgr ? {
       '/requests': mgrCounts.requests,
       '/timesheets': mgrCounts.timesheets,

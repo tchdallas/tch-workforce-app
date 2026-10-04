@@ -3,8 +3,9 @@ import { supabase } from '@/api/supabase';
 
 // Messaging talks to the DB directly: the tables use composite keys and
 // realtime, which the base44 entity adapter isn't built for. RLS (defined in
-// 20260702000006_messaging.sql) enforces all the access rules server-side —
-// this module just issues the queries.
+// 20260702000006_messaging.sql + 20261004000001_messaging_moderation.sql)
+// enforces all the access rules server-side — this module just issues the
+// queries.
 
 // -------------------------------------------------------------------- reads
 
@@ -18,7 +19,7 @@ export function useMyConversations(memberId) {
     queryFn: async () => {
       const { data: myParts, error: e1 } = await supabase
         .from('conversation_participants')
-        .select('conversation_id, last_read_at, muted')
+        .select('conversation_id, last_read_at, muted, silenced_at')
         .eq('team_member_id', memberId);
       if (e1) throw e1;
       const ids = (myParts || []).map(p => p.conversation_id);
@@ -48,6 +49,7 @@ export function useMyConversations(memberId) {
           participantIds,
           otherMemberIds: participantIds.filter(id => id !== memberId),
           muted: !!mine.muted,
+          silenced: !!mine.silenced_at, // an admin has stopped me posting here
           lastReadAt: mine.last_read_at,
           hasUnread,
         };
@@ -63,10 +65,27 @@ export function useMessages(conversationId) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('messages')
-        .select('id, conversation_id, sender_team_member_id, body, deleted_at, created_at, updated_at')
+        .select('id, conversation_id, sender_team_member_id, body, mentions, deleted_at, created_at, updated_at')
         .eq('conversation_id', conversationId)
         .order('created_at', { ascending: true })
         .limit(300);
+      if (error) throw error;
+      return data || [];
+    },
+  });
+}
+
+// Every participant row of one conversation (with mute/silence state) — for
+// the Manage dialog. RLS: participants and moderators can read these.
+export function useConversationParticipants(conversationId) {
+  return useQuery({
+    queryKey: ['conversation-participants', conversationId],
+    enabled: !!conversationId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('conversation_participants')
+        .select('team_member_id, muted, silenced_at, silenced_by, created_at')
+        .eq('conversation_id', conversationId);
       if (error) throw error;
       return data || [];
     },
@@ -113,13 +132,37 @@ export function useMyBlocks(memberId) {
   });
 }
 
+// Open flags I'm allowed to moderate (RLS scopes to my clubs), newest first,
+// with the flagged message and its conversation embedded.
+export function useOpenFlags(enabled = true) {
+  return useQuery({
+    queryKey: ['message-flags', 'open'],
+    enabled,
+    staleTime: 30000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('message_flags')
+        .select(`id, message_id, conversation_id, flagged_by, reason, created_at,
+                 messages ( id, body, sender_team_member_id, deleted_at ),
+                 conversations ( id, title, conversation_type, location_id, role_id )`)
+        .eq('status', 'open')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+  });
+}
+
 // ------------------------------------------------------------------- writes
 
-export async function sendMessage(conversationId, senderId, body) {
+// mentions: [{ kind: 'member'|'role'|'managers'|'all', target_id, label }]
+// The server refuses @role/@all from anyone below manager, and refuses any
+// send from a member an admin has silenced in that conversation.
+export async function sendMessage(conversationId, senderId, body, mentions = []) {
   const text = (body || '').trim();
   if (!text) return;
   const { error } = await supabase.from('messages')
-    .insert({ conversation_id: conversationId, sender_team_member_id: senderId, body: text });
+    .insert({ conversation_id: conversationId, sender_team_member_id: senderId, body: text, mentions });
   if (error) throw error;
 }
 
@@ -135,10 +178,36 @@ export async function setMuted(conversationId, memberId, muted) {
     .eq('conversation_id', conversationId).eq('team_member_id', memberId);
 }
 
+// Admin mute: the member keeps reading the thread but can't post until unmuted.
+export async function setSilenced(conversationId, memberId, silenced, byId) {
+  const { error } = await supabase.from('conversation_participants')
+    .update(silenced
+      ? { silenced_at: new Date().toISOString(), silenced_by: byId }
+      : { silenced_at: null, silenced_by: null })
+    .eq('conversation_id', conversationId).eq('team_member_id', memberId);
+  if (error) throw error;
+}
+
 export async function softDeleteMessage(messageId, memberId) {
-  await supabase.from('messages')
+  const { error } = await supabase.from('messages')
     .update({ deleted_at: new Date().toISOString(), deleted_by: memberId })
     .eq('id', messageId);
+  if (error) throw error;
+}
+
+export async function flagMessage({ messageId, conversationId, byId, reason }) {
+  const { error } = await supabase.from('message_flags')
+    .insert({ message_id: messageId, conversation_id: conversationId, flagged_by: byId, reason: reason?.trim() || null });
+  if (error) throw error;
+}
+
+// status: 'dismissed' | 'removed' | 'muted' — the caller performs the matching
+// action (soft-delete / silence) alongside this so the flag records the outcome.
+export async function resolveFlag(flagId, status, byId) {
+  const { error } = await supabase.from('message_flags')
+    .update({ status, reviewed_by: byId, reviewed_at: new Date().toISOString() })
+    .eq('id', flagId);
+  if (error) throw error;
 }
 
 // find-or-create a direct conversation between me and another member
@@ -167,14 +236,37 @@ export async function startDM(myId, otherId) {
   return conv.id;
 }
 
-export async function createGroup(title, memberIds, myId) {
+// Groups carry a club so moderation and @mentions stay property-specific.
+export async function createGroup(title, memberIds, myId, locationId = null) {
   const { data: conv, error } = await supabase.from('conversations')
-    .insert({ conversation_type: 'group', title: title?.trim() || 'New group' }).select('id').single();
+    .insert({ conversation_type: 'group', title: title?.trim() || 'New group', location_id: locationId || null })
+    .select('id').single();
   if (error) throw error;
   const rows = [...new Set([myId, ...memberIds])].map(id => ({ conversation_id: conv.id, team_member_id: id }));
   const { error: e2 } = await supabase.from('conversation_participants').insert(rows);
   if (e2) throw e2;
   return conv.id;
+}
+
+export async function updateGroup(conversationId, { title, locationId }) {
+  const patch = {};
+  if (title !== undefined) patch.title = title?.trim() || 'Group';
+  if (locationId !== undefined) patch.location_id = locationId || null;
+  const { error } = await supabase.from('conversations').update(patch).eq('id', conversationId);
+  if (error) throw error;
+}
+
+export async function addParticipants(conversationId, memberIds) {
+  if (!memberIds?.length) return;
+  const { error } = await supabase.from('conversation_participants')
+    .insert(memberIds.map(id => ({ conversation_id: conversationId, team_member_id: id })));
+  if (error) throw error;
+}
+
+export async function removeParticipant(conversationId, memberId) {
+  const { error } = await supabase.from('conversation_participants').delete()
+    .eq('conversation_id', conversationId).eq('team_member_id', memberId);
+  if (error) throw error;
 }
 
 export async function blockMember(myId, otherId) {

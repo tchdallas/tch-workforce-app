@@ -18,6 +18,7 @@ import { entryTypeLabel } from '@/components/discipline/disciplineShared';
 import { useOutstandingPolicyAcks } from '@/lib/policies';
 import { useMyPendingTimeEntries } from '@/lib/timesheets';
 import ConfirmHoursDialog from '@/components/timesheets/ConfirmHoursDialog';
+import FlaggedMessages, { useFlagInboxCount } from '@/components/dashboard/FlaggedMessages';
 
 // "Needs Your Attention" — the team member's task inbox on the Dashboard.
 // Every actionable thing lands here. Current sources:
@@ -108,7 +109,8 @@ export default function ActionItems({ showEmpty = false }) {
   const [confirmEntry, setConfirmEntry] = useState(null);
 
   const typeLabel = (id) => types.find(t => t.id === id)?.label || 'Attendance infraction';
-  const itemCount = pendingDocs.length + appealable.length + policyItems.length + pendingHours.length;
+  const flagCount = useFlagInboxCount();
+  const itemCount = pendingDocs.length + appealable.length + policyItems.length + pendingHours.length + flagCount;
 
   if (!member || (itemCount === 0 && !showEmpty)) return null;
 
@@ -129,6 +131,8 @@ export default function ActionItems({ showEmpty = false }) {
           </p>
         ) : (
           <div className="space-y-2">
+            <FlaggedMessages />
+
             {pendingDocs.map(d => (
               <Link key={d.id} to="/my-profile?tab=documents"
                     className="flex items-center gap-3 p-3 rounded-lg border border-amber-300 dark:border-amber-700 hover:bg-accent/40 transition-colors">

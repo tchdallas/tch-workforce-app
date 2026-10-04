@@ -54,8 +54,12 @@ export default function useRealtimeNotifications() {
           (payload) => {
             queryClient.invalidateQueries({ queryKey: ['notifications'] });
             // message notifications also bump the Messages nav bubble live
-            if (payload.new.type === 'message_received') {
+            if (payload.new.type === 'message_received' || payload.new.type === 'message_mentioned') {
               queryClient.invalidateQueries({ queryKey: ['unread-messages'] });
+            }
+            // a flag landed in this admin's review inbox
+            if (payload.new.type === 'message_flagged') {
+              queryClient.invalidateQueries({ queryKey: ['message-flags'] });
             }
             // realtime payloads carry raw snake_case columns
             const link = notificationLink({
