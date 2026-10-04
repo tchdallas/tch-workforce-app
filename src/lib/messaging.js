@@ -19,7 +19,7 @@ export function useMyConversations(memberId) {
     queryFn: async () => {
       const { data: myParts, error: e1 } = await supabase
         .from('conversation_participants')
-        .select('conversation_id, last_read_at, muted, silenced_at')
+        .select('conversation_id, last_read_at, muted')
         .eq('team_member_id', memberId);
       if (e1) throw e1;
       const ids = (myParts || []).map(p => p.conversation_id);
@@ -49,7 +49,6 @@ export function useMyConversations(memberId) {
           participantIds,
           otherMemberIds: participantIds.filter(id => id !== memberId),
           muted: !!mine.muted,
-          silenced: !!mine.silenced_at, // an admin has stopped me posting here
           lastReadAt: mine.last_read_at,
           hasUnread,
         };
@@ -75,8 +74,8 @@ export function useMessages(conversationId) {
   });
 }
 
-// Every participant row of one conversation (with mute/silence state) — for
-// the Manage dialog. RLS: participants and moderators can read these.
+// Every participant row of one conversation — for the Manage dialog.
+// RLS: participants and moderators can read these.
 export function useConversationParticipants(conversationId) {
   return useQuery({
     queryKey: ['conversation-participants', conversationId],
@@ -84,7 +83,7 @@ export function useConversationParticipants(conversationId) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('conversation_participants')
-        .select('team_member_id, muted, silenced_at, silenced_by, created_at')
+        .select('team_member_id, muted, created_at')
         .eq('conversation_id', conversationId);
       if (error) throw error;
       return data || [];
@@ -114,6 +113,24 @@ export function useMessagingDirectory(memberId) {
         status: m.status,
         canDm: m.can_dm,
       }));
+    },
+  });
+}
+
+// Admin mutes. A muted member can read Messages but not post, anywhere.
+// RLS: you always see your own mute; admins see every mute at their clubs.
+export function useMessagingMutes(memberId) {
+  return useQuery({
+    queryKey: ['messaging-mutes'],
+    enabled: !!memberId,
+    staleTime: 30000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('messaging_mutes')
+        .select('team_member_id, muted_by, muted_at, reason')
+        .order('muted_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
     },
   });
 }
@@ -178,13 +195,11 @@ export async function setMuted(conversationId, memberId, muted) {
     .eq('conversation_id', conversationId).eq('team_member_id', memberId);
 }
 
-// Admin mute: the member keeps reading the thread but can't post until unmuted.
-export async function setSilenced(conversationId, memberId, silenced, byId) {
-  const { error } = await supabase.from('conversation_participants')
-    .update(silenced
-      ? { silenced_at: new Date().toISOString(), silenced_by: byId }
-      : { silenced_at: null, silenced_by: null })
-    .eq('conversation_id', conversationId).eq('team_member_id', memberId);
+// Admin mute (everywhere): the member keeps reading but can't post in any
+// conversation until an admin lifts it. The RPC enforces: admins only, never
+// yourself, only people ranked below you, only at your clubs.
+export async function setMessagingMute(memberId, muted, reason = null) {
+  const { error } = await supabase.rpc('set_messaging_mute', { p_member: memberId, p_muted: muted, p_reason: reason });
   if (error) throw error;
 }
 

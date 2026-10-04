@@ -61,6 +61,10 @@ export default function useRealtimeNotifications() {
             if (payload.new.type === 'message_flagged') {
               queryClient.invalidateQueries({ queryKey: ['message-flags'] });
             }
+            // my messaging mute changed — swap the composer for the banner (or back)
+            if (payload.new.type === 'messaging_muted' || payload.new.type === 'messaging_unmuted') {
+              queryClient.invalidateQueries({ queryKey: ['messaging-mutes'] });
+            }
             // realtime payloads carry raw snake_case columns
             const link = notificationLink({
               relatedEntityType: payload.new.related_entity_type,

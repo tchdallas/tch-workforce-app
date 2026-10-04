@@ -5,8 +5,8 @@ import { supabase } from '@/api/supabase';
 import { useCurrentMember } from '@/hooks/useCurrentMember';
 import { useRoles, useLocations } from '@/lib/useAppData';
 import {
-  useMyConversations, useMessages, useMyBlocks, useMessagingDirectory, useConversationParticipants,
-  sendMessage, markRead, setMuted, setSilenced, startDM, createGroup, updateGroup, addParticipants,
+  useMyConversations, useMessages, useMyBlocks, useMessagingDirectory, useConversationParticipants, useMessagingMutes,
+  sendMessage, markRead, setMuted, setMessagingMute, startDM, createGroup, updateGroup, addParticipants,
   removeParticipant, blockMember, softDeleteMessage, flagMessage,
 } from '@/lib/messaging';
 import PageHeader from '@/components/common/PageHeader';
@@ -18,12 +18,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import TeamMemberCombobox from '@/components/common/TeamMemberCombobox';
+import MutedMembersDialog from '@/components/messaging/MutedMembersDialog';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
   MessageSquare, Plus, Users, Send, ChevronLeft, MoreVertical, Bell, BellOff, Ban, Hash, Trash2,
-  AtSign, Flag, Settings2, VolumeX, Volume2, UserMinus, UserPlus, ShieldAlert, Building2,
+  AtSign, Flag, Settings2, VolumeX, Volume2, UserMinus, UserPlus, ShieldAlert, Building2, ShieldOff,
 } from 'lucide-react';
 import { format, isSameDay } from 'date-fns';
 import { toast } from 'sonner';
@@ -36,7 +37,7 @@ const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 function sendErrorMessage(e, { silenced, broadcast }) {
   const msg = e?.message || '';
   if (/row-level security|policy/i.test(msg)) {
-    if (silenced) return "You've been muted in this conversation by an admin.";
+    if (silenced) return 'An admin has muted your messaging. You can read but not post.';
     if (broadcast) return 'Only managers and above can @ a role or @All here.';
     return "You can't post in this conversation.";
   }
@@ -45,7 +46,7 @@ function sendErrorMessage(e, { silenced, broadcast }) {
 
 export default function Messages() {
   const qc = useQueryClient();
-  const { member, isManager, isAdmin, canSeeAllLocations, assignedLocationIds, scopeLocations } = useCurrentMember();
+  const { member, isManager, isAdmin, canSeeAllLocations, assignedLocationIds, scopeLocations, outranks } = useCurrentMember();
   const myId = member?.id;
   const canBroadcast = !!member && isManager; // strict: no flash of @All for dealers while loading
   const { data: directory = [] } = useMessagingDirectory(myId);
@@ -53,6 +54,9 @@ export default function Messages() {
   const { data: locations = [] } = useLocations();
   const { data: conversations = [] } = useMyConversations(myId);
   const { data: myBlocks = [] } = useMyBlocks(myId);
+  const { data: mutes = [] } = useMessagingMutes(myId);
+  const amMuted = mutes.some(m => m.team_member_id === myId);
+  const mutedIds = useMemo(() => new Set(mutes.map(m => m.team_member_id)), [mutes]);
 
   const [selectedId, setSelectedId] = useState(null);
   const { data: messages = [] } = useMessages(selectedId);
@@ -71,6 +75,7 @@ export default function Messages() {
   const [newDmOpen, setNewDmOpen] = useState(false);
   const [newGroupOpen, setNewGroupOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
+  const [mutesOpen, setMutesOpen] = useState(false);
   const [flagTarget, setFlagTarget] = useState(null); // message being flagged
   const [flagReason, setFlagReason] = useState('');
   const [draft, setDraft] = useState('');
@@ -215,8 +220,8 @@ export default function Messages() {
       qc.invalidateQueries({ queryKey: ['messages', selectedId] });
       qc.invalidateQueries({ queryKey: ['conversations', myId] });
     } catch (e) {
-      toast.error(sendErrorMessage(e, { silenced: selected?.silenced, broadcast: used.some(m => m.kind === 'role' || m.kind === 'all') }));
-      qc.invalidateQueries({ queryKey: ['conversations', myId] }); // picks up a fresh mute
+      toast.error(sendErrorMessage(e, { silenced: amMuted, broadcast: used.some(m => m.kind === 'role' || m.kind === 'all') }));
+      qc.invalidateQueries({ queryKey: ['messaging-mutes'] }); // picks up a fresh mute
       setDraft(text);
     }
   };
@@ -243,6 +248,15 @@ export default function Messages() {
       qc.invalidateQueries({ queryKey: ['my-blocks', myId] });
       toast.success('Blocked');
     } catch (e) { toast.error(e.message?.includes('policy') ? "You can't block this person" : (e.message || 'Could not block')); }
+  };
+
+  // admin mute everywhere — the DB enforces who may mute whom
+  const toggleMemberMute = async (memberId, muted, reason = null) => {
+    try {
+      await setMessagingMute(memberId, muted, reason);
+      qc.invalidateQueries({ queryKey: ['messaging-mutes'] });
+      toast.success(muted ? `${nameOf(memberId)} muted — they can read but not post anywhere` : `${nameOf(memberId)} unmuted`);
+    } catch (e) { toast.error(e.message || 'Could not change mute'); }
   };
 
   const handleDelete = async (m) => {
@@ -279,7 +293,18 @@ export default function Messages() {
                 <Users className="w-3.5 h-3.5" />
               </Button>
             )}
+            {isAdmin && (
+              <Button size="sm" variant="outline" className="gap-1.5 h-8 relative" onClick={() => setMutesOpen(true)} title="Muted members">
+                <ShieldOff className="w-3.5 h-3.5" />
+                {mutes.length > 0 && <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-destructive text-white text-[9px] leading-4 text-center">{mutes.length}</span>}
+              </Button>
+            )}
           </div>
+          {amMuted && (
+            <div className="px-3 py-2 text-[11px] text-destructive bg-destructive/5 border-b border-border flex items-center gap-1.5">
+              <VolumeX className="w-3.5 h-3.5 shrink-0" /> An admin has muted your messaging. You can read, but not post.
+            </div>
+          )}
           <div className="flex-1 overflow-y-auto">
             {conversations.length === 0 && (
               <p className="text-xs text-muted-foreground text-center py-8 px-4">No conversations yet. Start a DM to begin.</p>
@@ -298,8 +323,7 @@ export default function Messages() {
                   </p>
                 </div>
                 {c.hasUnread && <span className="w-2 h-2 rounded-full bg-primary shrink-0" />}
-                {c.silenced && <VolumeX className="w-3 h-3 text-destructive shrink-0" title="You can’t post here" />}
-                {c.muted && !c.silenced && <BellOff className="w-3 h-3 text-muted-foreground shrink-0" />}
+                {c.muted && <BellOff className="w-3 h-3 text-muted-foreground shrink-0" />}
               </button>
             ))}
           </div>
@@ -394,10 +418,10 @@ export default function Messages() {
                 {messages.length === 0 && <p className="text-xs text-muted-foreground text-center py-8">No messages yet — say hello.</p>}
               </div>
 
-              {selected.silenced ? (
+              {amMuted ? (
                 <div className="p-3 border-t border-border flex items-center gap-2 text-xs text-muted-foreground bg-muted/40">
                   <VolumeX className="w-4 h-4 text-destructive shrink-0" />
-                  An admin has muted you in this conversation. You can read it, but you can’t post until they unmute you.
+                  An admin has muted your messaging. You can read, but you can’t post until an admin unmutes you.
                 </div>
               ) : (
                 <div className="relative p-2 border-t border-border">
@@ -470,7 +494,12 @@ export default function Messages() {
       {selected && selected.conversation_type !== 'direct' && (
         <ManageGroupDialog open={manageOpen} onClose={() => setManageOpen(false)}
           conversation={selected} canModerate={canMod} myId={myId} nameOf={nameOf} initials={initials}
-          candidates={dmCandidates} clubs={myClubs} />
+          candidates={dmCandidates} clubs={myClubs} mutedIds={mutedIds} onToggleMute={toggleMemberMute} />
+      )}
+
+      {/* Muted members (admins) */}
+      {isAdmin && (
+        <MutedMembersDialog open={mutesOpen} onClose={() => setMutesOpen(false)} mutes={mutes} myId={myId} outranks={outranks} onToggleMute={toggleMemberMute} />
       )}
 
       {/* Flag a message */}
@@ -573,7 +602,7 @@ function NewGroupDialog({ open, onClose, candidates, nameOf, clubs, defaultClubI
 
 // Members list for everyone; rename / club / add / remove / mute for moderators.
 // Role channels auto-populate from role assignments, so they only get mute.
-function ManageGroupDialog({ open, onClose, conversation, canModerate, myId, nameOf, initials, candidates, clubs }) {
+function ManageGroupDialog({ open, onClose, conversation, canModerate, myId, nameOf, initials, candidates, clubs, mutedIds, onToggleMute }) {
   const qc = useQueryClient();
   const isGroup = conversation.conversation_type === 'group';
   const { data: participants = [] } = useConversationParticipants(open ? conversation.id : null);
@@ -606,7 +635,7 @@ function ManageGroupDialog({ open, onClose, conversation, canModerate, myId, nam
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="text-base">{canModerate ? 'Manage group' : 'Members'}</DialogTitle>
-          {canModerate && <DialogDescription>Muted members can still read the thread but can’t post until you unmute them.</DialogDescription>}
+          {canModerate && <DialogDescription>Muting a member stops them posting anywhere in Messages (they can still read) until an admin unmutes them.</DialogDescription>}
         </DialogHeader>
 
         {canModerate && isGroup && (
@@ -628,7 +657,7 @@ function ManageGroupDialog({ open, onClose, conversation, canModerate, myId, nam
           <div className="max-h-60 overflow-y-auto border border-border rounded-md mt-1">
             {sorted.map(p => {
               const me = p.team_member_id === myId;
-              const silenced = !!p.silenced_at;
+              const silenced = mutedIds?.has(p.team_member_id);
               return (
                 <div key={p.team_member_id} className="flex items-center gap-2 px-2 py-1.5 text-sm border-b border-border/50 last:border-0">
                   <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-semibold shrink-0">{initials(p.team_member_id)}</span>
@@ -636,8 +665,8 @@ function ManageGroupDialog({ open, onClose, conversation, canModerate, myId, nam
                   {silenced && <Badge variant="outline" className="text-[10px] text-destructive border-destructive/40 gap-1"><VolumeX className="w-3 h-3" /> muted</Badge>}
                   {canModerate && !me && (
                     <>
-                      <Button size="icon" variant="ghost" className="h-7 w-7" disabled={busy} title={silenced ? 'Unmute (let them post)' : 'Mute (they can read, not post)'}
-                        onClick={() => run(() => setSilenced(conversation.id, p.team_member_id, !silenced, myId), silenced ? 'Unmuted' : 'Muted — they can read but not post')}>
+                      <Button size="icon" variant="ghost" className="h-7 w-7" disabled={busy} title={silenced ? 'Unmute (let them post again)' : 'Mute everywhere (they can read, not post)'}
+                        onClick={() => onToggleMute(p.team_member_id, !silenced)}>
                         {silenced ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
                       </Button>
                       {isGroup && (

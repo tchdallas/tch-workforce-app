@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { useCurrentMember } from '@/hooks/useCurrentMember';
 import { useRoles, useLocations } from '@/lib/useAppData';
-import { useOpenFlags, resolveFlag, softDeleteMessage, setSilenced } from '@/lib/messaging';
+import { useOpenFlags, resolveFlag, softDeleteMessage, setMessagingMute } from '@/lib/messaging';
 import { Button } from '@/components/ui/button';
 import { Flag, ExternalLink, Trash2, VolumeX, Check } from 'lucide-react';
 import { format } from 'date-fns';
@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 // moderate the conversation see a flag (RLS). Each one resolves with:
 //   Dismiss              — nothing wrong, close the flag
 //   Remove message       — soft-delete the message, close the flag
-//   Remove & mute sender — also stop the sender posting in that thread
+//   Remove & mute sender — also stop the sender posting anywhere in Messages
 // Reviewing here needs no trip into the thread (the admin may not be in it).
 
 export function useFlagInboxCount() {
@@ -69,14 +69,16 @@ export default function FlaggedMessages() {
         if (!flag.messages?.deleted_at) await softDeleteMessage(flag.message_id, member.id);
       }
       if (status === 'muted') {
-        await setSilenced(flag.conversation_id, flag.messages.sender_team_member_id, true, member.id);
+        await setMessagingMute(flag.messages.sender_team_member_id, true,
+          `Flagged message removed by ${member.preferredName || member.firstName} ${member.lastName}`);
+        qc.invalidateQueries({ queryKey: ['messaging-mutes'] });
       }
       await resolveFlag(flag.id, status, member.id);
       qc.invalidateQueries({ queryKey: ['message-flags'] });
       qc.invalidateQueries({ queryKey: ['messages', flag.conversation_id] });
       toast.success(status === 'dismissed' ? 'Flag dismissed'
         : status === 'removed' ? 'Message removed'
-        : `Message removed and ${nameOf(flag.messages.sender_team_member_id)} muted in that thread`);
+        : `Message removed and ${nameOf(flag.messages.sender_team_member_id)} muted everywhere`);
     } catch (e) {
       toast.error(e.message || 'Could not resolve the flag');
     } finally { setBusyId(null); }

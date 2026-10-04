@@ -39,6 +39,8 @@ export function notificationLink(n) {
     case 'timesheet':
       return '/timesheets';
     case 'message_received':
+    case 'messaging_muted':
+    case 'messaging_unmuted':
       return '/messages';
     default:
       return null;
