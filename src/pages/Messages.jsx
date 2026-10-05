@@ -6,8 +6,8 @@ import { useCurrentMember } from '@/hooks/useCurrentMember';
 import { useRoles, useLocations } from '@/lib/useAppData';
 import {
   useMyConversations, useMessages, useMyBlocks, useMessagingDirectory, useConversationParticipants, useMessagingMutes,
-  sendMessage, markRead, setMuted, setMessagingMute, startDM, createGroup, updateGroup, addParticipants,
-  removeParticipant, blockMember, softDeleteMessage, flagMessage,
+  sendMessage, markRead, setMuted, setPinned, hideConversation, archiveConversation, setMessagingMute, startDM,
+  createGroup, updateGroup, addParticipants, removeParticipant, blockMember, softDeleteMessage, flagMessage,
 } from '@/lib/messaging';
 import PageHeader from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,10 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import TeamMemberCombobox from '@/components/common/TeamMemberCombobox';
 import MutedMembersDialog from '@/components/messaging/MutedMembersDialog';
@@ -25,7 +29,16 @@ import {
 import {
   MessageSquare, Plus, Users, Send, ChevronLeft, MoreVertical, Bell, BellOff, Ban, Hash, Trash2,
   AtSign, Flag, Settings2, VolumeX, Volume2, UserMinus, UserPlus, ShieldAlert, Building2, ShieldOff, ArrowLeftRight,
+  Pin, PinOff, LogOut, EyeOff,
 } from 'lucide-react';
+
+// Each kind of thread gets its own colour so the list scans at a glance:
+// DMs blue, groups violet, role channels gold, the swap board green.
+const KIND = {
+  direct:     { avatar: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',             rail: 'border-l-sky-500' },
+  group:      { avatar: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300', rail: 'border-l-violet-500' },
+  role_group: { avatar: 'bg-primary/15 text-primary',                                               rail: 'border-l-primary' },
+};
 import { format, isSameDay } from 'date-fns';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -76,6 +89,7 @@ export default function Messages() {
   const [newGroupOpen, setNewGroupOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
   const [mutesOpen, setMutesOpen] = useState(false);
+  const [confirm, setConfirm] = useState(null); // { kind: 'hide'|'leave'|'archive' }
   const [flagTarget, setFlagTarget] = useState(null); // message being flagged
   const [flagReason, setFlagReason] = useState('');
   const [draft, setDraft] = useState('');
@@ -241,6 +255,27 @@ export default function Messages() {
     toast.success(selected.muted ? 'Unmuted — you’ll get alerts again' : 'Muted — you’ll still be alerted when someone @’s you');
   };
 
+  const togglePin = async (c) => {
+    await setPinned(c.id, myId, !c.pinned);
+    qc.invalidateQueries({ queryKey: ['conversations', myId] });
+  };
+
+  // delete options: hide for me (any thread), leave a group, or delete a group for everyone
+  const runConfirm = async () => {
+    const kind = confirm?.kind; const c = selected;
+    setConfirm(null);
+    if (!kind || !c) return;
+    try {
+      if (kind === 'hide') { await hideConversation(c.id, myId); toast.success('Conversation removed — it comes back if someone messages you here'); }
+      if (kind === 'leave') { await removeParticipant(c.id, myId); toast.success('You left the group'); }
+      if (kind === 'archive') { await archiveConversation(c.id, myId); toast.success('Group deleted for everyone'); }
+      setSelectedId(null);
+      qc.invalidateQueries({ queryKey: ['conversations', myId] });
+      qc.invalidateQueries({ queryKey: ['unread-messages'] });
+    } catch (e) { toast.error(/policy|security/i.test(e.message || '') ? "You can't do that here" : (e.message || 'Could not remove')); }
+  };
+  const canDeleteGroup = selected?.conversation_type === 'group' && (selected.created_by === myId || canMod);
+
   const handleBlock = async () => {
     const otherId = selected.otherMemberIds[0];
     try {
@@ -306,8 +341,8 @@ export default function Messages() {
             </div>
           )}
           <div className="flex-1 overflow-y-auto">
-            <Link to="/swap-board" className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-muted/50 border-b border-border/50">
-              <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 flex items-center justify-center shrink-0"><ArrowLeftRight className="w-4 h-4" /></div>
+            <Link to="/swap-board" className="w-full flex items-center gap-2.5 pl-2.5 pr-3 py-2.5 text-left hover:bg-muted/50 border-b border-border/50 border-l-2 border-l-emerald-500">
+              <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 flex items-center justify-center shrink-0"><ArrowLeftRight className="w-4 h-4" /></div>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium">Swap Board</p>
                 <p className="text-[11px] text-muted-foreground">Pick up, give away, or trade shifts</p>
@@ -316,10 +351,13 @@ export default function Messages() {
             {conversations.length === 0 && (
               <p className="text-xs text-muted-foreground text-center py-8 px-4">No conversations yet. Start a DM to begin.</p>
             )}
-            {conversations.map(c => (
-              <button key={c.id} onClick={() => setSelectedId(c.id)}
-                className={cn('w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-muted/50 border-b border-border/50', selectedId === c.id && 'bg-muted')}>
-                <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 text-[11px] font-semibold">
+            {conversations.map((c, i) => (
+              <div key={c.id} className="relative group/row">
+              {c.pinned && i === 0 && <p className="text-[10px] uppercase tracking-wide text-muted-foreground px-3 pt-2">Pinned</p>}
+              {!c.pinned && i > 0 && conversations[i - 1].pinned && <p className="text-[10px] uppercase tracking-wide text-muted-foreground px-3 pt-2">Recent</p>}
+              <button onClick={() => setSelectedId(c.id)}
+                className={cn('w-full flex items-center gap-2.5 pl-2.5 pr-8 py-2.5 text-left hover:bg-muted/50 border-b border-border/50 border-l-2', KIND[c.conversation_type]?.rail, selectedId === c.id && 'bg-muted')}>
+                <div className={cn('w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-[11px] font-semibold', KIND[c.conversation_type]?.avatar)}>
                   {c.conversation_type === 'direct' ? initials(c.otherMemberIds[0]) : c.conversation_type === 'role_group' ? <Hash className="w-4 h-4" /> : <Users className="w-4 h-4" />}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -332,6 +370,12 @@ export default function Messages() {
                 {c.hasUnread && <span className="w-2 h-2 rounded-full bg-primary shrink-0" />}
                 {c.muted && <BellOff className="w-3 h-3 text-muted-foreground shrink-0" />}
               </button>
+              <button type="button" title={c.pinned ? 'Unpin' : 'Pin to top'} onClick={(e) => { e.stopPropagation(); togglePin(c); }}
+                className={cn('absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-muted-foreground hover:text-foreground',
+                  c.pinned ? 'text-primary' : 'opacity-0 group-hover/row:opacity-100 focus:opacity-100')}>
+                {c.pinned ? <Pin className="w-3.5 h-3.5 fill-current" /> : <Pin className="w-3.5 h-3.5" />}
+              </button>
+              </div>
             ))}
           </div>
         </div>
@@ -363,6 +407,9 @@ export default function Messages() {
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7"><MoreVertical className="w-4 h-4" /></Button></DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => togglePin(selected)}>
+                      {selected.pinned ? <><PinOff className="w-4 h-4 mr-2" /> Unpin</> : <><Pin className="w-4 h-4 mr-2" /> Pin to top</>}
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={toggleMute}>
                       {selected.muted ? <><Bell className="w-4 h-4 mr-2" /> Unmute</> : <><BellOff className="w-4 h-4 mr-2" /> Mute (still alerts on @)</>}
                     </DropdownMenuItem>
@@ -371,11 +418,18 @@ export default function Messages() {
                         {canMod ? <><Settings2 className="w-4 h-4 mr-2" /> Manage group</> : <><Users className="w-4 h-4 mr-2" /> Members</>}
                       </DropdownMenuItem>
                     )}
+                    <DropdownMenuSeparator />
                     {selected.conversation_type === 'direct' && (
-                      <>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive" onClick={handleBlock}><Ban className="w-4 h-4 mr-2" /> Block</DropdownMenuItem>
-                      </>
+                      <DropdownMenuItem className="text-destructive" onClick={handleBlock}><Ban className="w-4 h-4 mr-2" /> Block</DropdownMenuItem>
+                    )}
+                    {selected.conversation_type === 'group' && (
+                      <DropdownMenuItem className="text-destructive" onClick={() => setConfirm({ kind: 'leave' })}><LogOut className="w-4 h-4 mr-2" /> Leave group</DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem className="text-destructive" onClick={() => setConfirm({ kind: 'hide' })}>
+                      {selected.conversation_type === 'role_group' ? <><EyeOff className="w-4 h-4 mr-2" /> Hide channel</> : <><Trash2 className="w-4 h-4 mr-2" /> Delete conversation</>}
+                    </DropdownMenuItem>
+                    {canDeleteGroup && (
+                      <DropdownMenuItem className="text-destructive" onClick={() => setConfirm({ kind: 'archive' })}><Trash2 className="w-4 h-4 mr-2" /> Delete group for everyone</DropdownMenuItem>
                     )}
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -503,6 +557,28 @@ export default function Messages() {
           conversation={selected} canModerate={canMod} myId={myId} nameOf={nameOf} initials={initials}
           candidates={dmCandidates} clubs={myClubs} mutedIds={mutedIds} onToggleMute={toggleMemberMute} />
       )}
+
+      {/* delete / leave confirmation */}
+      <AlertDialog open={!!confirm} onOpenChange={(o) => { if (!o) setConfirm(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirm?.kind === 'leave' ? 'Leave this group?' : confirm?.kind === 'archive' ? 'Delete this group for everyone?' : 'Remove this conversation?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirm?.kind === 'leave' && 'You’ll stop seeing its messages. A manager can add you back later.'}
+              {confirm?.kind === 'archive' && 'The group disappears for every member and nobody can post in it again. Its history stays on record for admins.'}
+              {confirm?.kind === 'hide' && 'It disappears from your list. Nothing is deleted for anyone else, and it comes back if someone posts in it again.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={runConfirm}>
+              {confirm?.kind === 'leave' ? 'Leave' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Muted members (admins) */}
       {isAdmin && (

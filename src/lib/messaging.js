@@ -19,7 +19,7 @@ export function useMyConversations(memberId) {
     queryFn: async () => {
       const { data: myParts, error: e1 } = await supabase
         .from('conversation_participants')
-        .select('conversation_id, last_read_at, muted')
+        .select('conversation_id, last_read_at, muted, pinned, hidden_at')
         .eq('team_member_id', memberId);
       if (e1) throw e1;
       const ids = (myParts || []).map(p => p.conversation_id);
@@ -27,7 +27,8 @@ export function useMyConversations(memberId) {
 
       const [{ data: convs, error: e2 }, { data: parts, error: e3 }] = await Promise.all([
         supabase.from('conversations')
-          .select('id, conversation_type, title, location_id, role_id, last_message_at, created_by')
+          .select('id, conversation_type, title, location_id, role_id, last_message_at, created_by, archived_at')
+          .is('archived_at', null)
           .in('id', ids),
         supabase.from('conversation_participants')
           .select('conversation_id, team_member_id')
@@ -39,7 +40,11 @@ export function useMyConversations(memberId) {
       const partsBy = {};
       (parts || []).forEach(p => { (partsBy[p.conversation_id] ||= []).push(p.team_member_id); });
 
-      return (convs || []).map(c => {
+      return (convs || []).filter(c => {
+        // "deleted for me": hidden until someone posts again
+        const h = mineBy[c.id]?.hidden_at;
+        return !h || (c.last_message_at && new Date(c.last_message_at) > new Date(h));
+      }).map(c => {
         const mine = mineBy[c.id] || {};
         const participantIds = partsBy[c.id] || [];
         const hasUnread = !!c.last_message_at &&
@@ -49,10 +54,11 @@ export function useMyConversations(memberId) {
           participantIds,
           otherMemberIds: participantIds.filter(id => id !== memberId),
           muted: !!mine.muted,
+          pinned: !!mine.pinned,
           lastReadAt: mine.last_read_at,
           hasUnread,
         };
-      }).sort((a, b) => new Date(b.last_message_at || 0) - new Date(a.last_message_at || 0));
+      }).sort((a, b) => (b.pinned - a.pinned) || (new Date(b.last_message_at || 0) - new Date(a.last_message_at || 0)));
     },
   });
 }
@@ -187,6 +193,29 @@ export async function markRead(conversationId, memberId) {
   await supabase.from('conversation_participants')
     .update({ last_read_at: new Date().toISOString() })
     .eq('conversation_id', conversationId).eq('team_member_id', memberId);
+}
+
+export async function setPinned(conversationId, memberId, pinned) {
+  const { error } = await supabase.from('conversation_participants')
+    .update({ pinned })
+    .eq('conversation_id', conversationId).eq('team_member_id', memberId);
+  if (error) throw error;
+}
+
+// "Delete conversation" (for me): hides it until the next message arrives
+export async function hideConversation(conversationId, memberId) {
+  const { error } = await supabase.from('conversation_participants')
+    .update({ hidden_at: new Date().toISOString(), pinned: false })
+    .eq('conversation_id', conversationId).eq('team_member_id', memberId);
+  if (error) throw error;
+}
+
+// delete a group for everyone (creator or a moderating admin — RLS decides)
+export async function archiveConversation(conversationId, byId) {
+  const { error } = await supabase.from('conversations')
+    .update({ archived_at: new Date().toISOString(), archived_by: byId })
+    .eq('id', conversationId);
+  if (error) throw error;
 }
 
 export async function setMuted(conversationId, memberId, muted) {
