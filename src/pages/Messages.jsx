@@ -57,6 +57,16 @@ function sendErrorMessage(e, { silenced, broadcast }) {
   return msg || 'Could not send';
 }
 
+
+// A person is findable by ANY of their names: real first/last or preferred.
+// (Matching only the display label made 'Victor' miss someone whose preferred
+// name replaced it, e.g. "Dealer Test 1 Leone".)
+const memberMatches = (m, q) => {
+  if (!q) return true;
+  if (!m) return false;
+  return `${m.firstName || ''} ${m.lastName || ''} ${m.preferredName || ''}`.toLowerCase().includes(q);
+};
+
 export default function Messages() {
   const qc = useQueryClient();
   const { member, isManager, isAdmin, canSeeAllLocations, assignedLocationIds, scopeLocations, outranks } = useCurrentMember();
@@ -99,7 +109,10 @@ export default function Messages() {
   const inputRef = useRef(null);
 
   const memberById = useMemo(() => Object.fromEntries(directory.map(m => [m.id, m])), [directory]);
-  const nameOf = (id) => { const m = memberById[id]; return m ? `${m.preferredName || m.firstName} ${m.lastName}` : 'Unknown'; };
+  const nameOf = (id) => {
+    const m = memberById[id] || (id === member?.id ? member : null); // the directory excludes self
+    return m ? `${m.preferredName || m.firstName} ${m.lastName}` : 'Unknown';
+  };
   const initials = (id) => nameOf(id).split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
   const clubName = (id) => { const l = locations.find(x => x.id === id); return l?.abbreviation || l?.name || null; };
 
@@ -648,7 +661,7 @@ function NewGroupDialog({ open, onClose, candidates, nameOf, clubs, defaultClubI
     // default club: my only club, else my home club if I manage it
     setClubId(clubs.length === 1 ? clubs[0].id : (clubs.some(c => c.id === defaultClubId) ? defaultClubId : null));
   }, [open, clubs, defaultClubId]);
-  const filtered = candidates.filter(c => !search.trim() || nameOf(c.id).toLowerCase().includes(search.toLowerCase()));
+  const filtered = candidates.filter(c => memberMatches(c, search.trim().toLowerCase()));
   const toggle = (id) => setIds(x => x.includes(id) ? x.filter(i => i !== id) : [...x, id]);
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -710,7 +723,7 @@ function ManageGroupDialog({ open, onClose, conversation, canModerate, myId, nam
 
   const detailsDirty = title.trim() !== (conversation.title || '') || (clubId || null) !== (conversation.location_id || null);
   const inGroup = new Set(participants.map(p => p.team_member_id));
-  const addable = candidates.filter(c => !inGroup.has(c.id) && (!addSearch.trim() || nameOf(c.id).toLowerCase().includes(addSearch.toLowerCase()))).slice(0, 8);
+  const addable = candidates.filter(c => !inGroup.has(c.id) && memberMatches(c, addSearch.trim().toLowerCase())).slice(0, 8);
   const sorted = [...participants].sort((a, b) => nameOf(a.team_member_id).localeCompare(nameOf(b.team_member_id)));
 
   return (
