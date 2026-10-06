@@ -40,6 +40,13 @@ export default function TopBar({ onMobileMenuOpen, onHelp }) {
           size="icon"
           aria-label={total > 0 ? `Open menu — ${total} needing attention` : 'Open menu'}
           className="lg:hidden h-11 w-11 active:bg-accent relative before:absolute before:content-[''] before:-inset-2"
+          // Open on pointerDOWN for touch: a mobile 'click' is only delivered
+          // after the browser is sure the finger didn't drift — a few pixels of
+          // wobble silently cancels it, which read as "button ignores taps".
+          // pointerdown fires the moment the finger lands and can't be
+          // drift-cancelled. onClick stays for mouse + keyboard; opening is
+          // idempotent (set-true, not toggle) so double-firing is harmless.
+          onPointerDown={(e) => { if (e.pointerType !== 'mouse') onMobileMenuOpen(); }}
           onClick={onMobileMenuOpen}
         >
           <Menu className="w-5 h-5" />
