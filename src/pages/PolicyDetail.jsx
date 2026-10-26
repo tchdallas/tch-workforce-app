@@ -5,7 +5,7 @@ import { useCurrentMember } from '@/hooks/useCurrentMember';
 import { useRoles, useLocations } from '@/lib/useAppData';
 import {
   usePolicy, usePolicyDocuments, usePolicyUpdates, useMyPolicyAcks,
-  usePolicyAckStatus, usePolicyUpdateAckStatus,
+  usePolicyAckStatus, usePolicyUpdateAckStatus, deletePolicyUpdate,
   acknowledgePolicy, acknowledgePolicyUpdate, policyDocumentUrl, archivePolicy,
   restorePolicy, publishPolicy, rejectPolicy, usePolicyCategories,
 } from '@/lib/policies';
@@ -21,8 +21,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   ScrollText, FileText, Check, Pencil, Megaphone, ChevronDown,
-  CheckCircle2, Circle, Archive, ArrowLeft, Undo2, RotateCcw,
+  CheckCircle2, Circle, Archive, ArrowLeft, Undo2, RotateCcw, Trash2,
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
@@ -299,6 +303,7 @@ export default function PolicyDetail() {
               myAckAt={acks?.updates?.[u.id]}
               isRecipient={acks?.updates ? Object.prototype.hasOwnProperty.call(acks.updates, u.id) : false}
               isManager={canManage}
+              canModerate={!!member && isAdmin}
             />
           ))}
         </TabsContent>
@@ -314,10 +319,26 @@ export default function PolicyDetail() {
   );
 }
 
-function UpdateCard({ u, policyId, memberId, myAckAt, isRecipient, isManager }) {
+function UpdateCard({ u, policyId, memberId, myAckAt, isRecipient, isManager, canModerate }) {
   const qc = useQueryClient();
   const kind = UPDATE_KINDS.find(k => k.value === u.kind);
   const needsAck = isRecipient && u.requires_acknowledgment && !myAckAt;
+  const canDelete = canModerate || (!!memberId && u.created_by === memberId);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const remove = async () => {
+    setDeleting(true);
+    try {
+      await deletePolicyUpdate(u.id);
+      setConfirmDelete(false);
+      qc.invalidateQueries({ queryKey: ['policy-updates', policyId] });
+      qc.invalidateQueries({ queryKey: ['policy-my-acks', policyId] });
+      qc.invalidateQueries({ queryKey: ['policy-acks-outstanding'] });
+      toast.success('Update deleted');
+    } catch (e) { toast.error(e.message || 'Could not delete that update'); }
+    finally { setDeleting(false); }
+  };
 
   const ack = async () => {
     try {
@@ -342,11 +363,23 @@ function UpdateCard({ u, policyId, memberId, myAckAt, isRecipient, isManager }) 
             {u.published_at && ` · ${formatDistanceToNow(new Date(u.published_at), { addSuffix: true })}`}
           </p>
         </div>
-        {u.requires_acknowledgment && (
-          myAckAt
-            ? <Badge variant="outline" className="gap-1 shrink-0 text-emerald-600 border-emerald-200"><Check className="w-3 h-3" /> Confirmed</Badge>
-            : isRecipient ? <Badge className="shrink-0">Action needed</Badge> : null
-        )}
+        <div className="flex items-center gap-1 shrink-0">
+          {u.requires_acknowledgment && (
+            myAckAt
+              ? <Badge variant="outline" className="gap-1 shrink-0 text-emerald-600 border-emerald-200"><Check className="w-3 h-3" /> Confirmed</Badge>
+              : isRecipient ? <Badge className="shrink-0">Action needed</Badge> : null
+          )}
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(true)}
+              className="p-1.5 rounded hover:bg-muted text-muted-foreground"
+              aria-label="Delete update" title="Delete update"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
       <p className="text-sm mt-2 whitespace-pre-wrap break-words leading-relaxed">{u.body}</p>
@@ -358,6 +391,28 @@ function UpdateCard({ u, policyId, memberId, myAckAt, isRecipient, isManager }) 
       )}
 
       {isManager && u.requires_acknowledgment && <UpdateAckPanel updateId={u.id} />}
+
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this update?</AlertDialogTitle>
+            <AlertDialogDescription>
+              "{u.title}" will be removed for everyone
+              {u.requires_acknowledgment ? ', along with its read confirmations' : ''}. This can't be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleting}
+              onClick={(e) => { e.preventDefault(); remove(); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }

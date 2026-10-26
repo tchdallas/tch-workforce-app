@@ -360,6 +360,13 @@ export async function setCommentPinned(commentId, pinned) {
 }
 
 // Soft delete — the row stays for the audit trail, the UI shows a tombstone.
+// Hard delete via RPC: the function checks author-or-moderator and the audit
+// log keeps the removed row. Recipients/acks cascade away with it.
+export async function deletePolicyUpdate(updateId) {
+  const { error } = await supabase.rpc('delete_policy_update', { uid: updateId });
+  if (error) throw error;
+}
+
 export async function deletePolicyComment(commentId) {
   const { error } = await supabase
     .from('policy_comments')
