@@ -6,7 +6,7 @@ import ViewSchedule from './ViewSchedule';
 import { startOfWeek, addDays, format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Clipboard, Upload, FileText, Search, X } from 'lucide-react';
+import { Plus, Clipboard, Upload, FileText, Search, X, Copy as CopyIcon } from 'lucide-react';
 import PageHeader from '@/components/common/PageHeader';
 import LocationSelector from '@/components/common/LocationSelector';
 import WeekSelector from '@/components/schedule/WeekSelector';
@@ -21,6 +21,7 @@ import PublishButton from '@/components/schedule/PublishButton';
 import DayViewSummary from '@/components/schedule/DayViewSummary';
 import DayTimeline from '@/components/schedule/DayTimeline';
 import ImportTemplateModal from '@/components/schedule/ImportTemplateModal';
+import CopyWeekDialog from '@/components/schedule/CopyWeekDialog';
 import RolePanel from '@/components/schedule/RolePanel';
 import TeamMemberModal from '@/components/team/TeamMemberModal';
 import { useLocations, useRoles, useTeamMembers, usePars, useParTemplates, useAllAvailability, businessDayStartHour, scheduleRoleOrder, sortRolesByOrder } from '@/lib/useAppData';
@@ -47,6 +48,7 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
   const [memberModal, setMemberModal] = useState({ open: false, member: null });
   const [importModal, setImportModal] = useState(false);
   const [importTemplateModal, setImportTemplateModal] = useState(false);
+  const [copyWeekOpen, setCopyWeekOpen] = useState(false);
   const [tmSearch, setTmSearch] = useState('');
   const [tmSearchResults, setTmSearchResults] = useState([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
@@ -932,6 +934,9 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
             guardedPublish(ids.filter(id => shifts.find(s => s.id === id && s.status === 'draft')));
           }}
         />
+        <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setCopyWeekOpen(true)}>
+          <CopyIcon className="w-4 h-4" /> Copy Week
+        </Button>
         <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setImportTemplateModal(true)}>
           <FileText className="w-4 h-4" /> Import Template
         </Button>
@@ -1226,6 +1231,18 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
         onImported={() => {
           queryClient.invalidateQueries({ queryKey: ['schedule-shifts'] });
           setImportModal(false);
+        }}
+      />
+
+      <CopyWeekDialog
+        open={copyWeekOpen}
+        onClose={() => setCopyWeekOpen(false)}
+        weekStart={weekStart}
+        selectedLocation={selectedLocation}
+        onCopied={(targetWeek) => {
+          queryClient.invalidateQueries({ queryKey: ['schedule-shifts'] });
+          setWeekStart(targetWeek);
+          setCopyWeekOpen(false);
         }}
       />
 
