@@ -23,6 +23,10 @@ export function notificationLink(n) {
       return '/downs';
     case 'bug_report':
       return '/bug-reports';
+    case 'team_member':
+      // auto-drafted discipline: straight to that member's File tab
+      return n.type === 'discipline_draft' && n.relatedEntityId
+        ? `/team-members?edit=${n.relatedEntityId}&tab=file` : null;
     case 'policy':
       return n.relatedEntityId ? `/policies/${n.relatedEntityId}` : '/policies';
     case 'swap_post':

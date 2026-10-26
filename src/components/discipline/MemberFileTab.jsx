@@ -108,7 +108,12 @@ export default function MemberFileTab({ memberId, memberName, canManage = true }
                       {format(parseISO(d.createdAt.slice(0, 10)), 'MMM d, yyyy')}
                     </span>
                   </span>
-                  <Badge className={`text-[10px] border-0 ${st.cls}`}>{st.label}</Badge>
+                  <span className="flex items-center gap-1">
+                    {d.source === 'attendance_auto' && (
+                      <Badge variant="outline" className="text-[10px] border-primary/50 text-primary">Auto-drafted</Badge>
+                    )}
+                    <Badge className={`text-[10px] border-0 ${st.cls}`}>{st.label}</Badge>
+                  </span>
                 </div>
                 {d.observedBehavior && (
                   <p className="text-xs text-muted-foreground truncate mt-0.5">{d.observedBehavior}</p>

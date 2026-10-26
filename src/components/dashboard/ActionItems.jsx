@@ -30,8 +30,26 @@ import FlaggedMessages, { useFlagInboxCount } from '@/components/dashboard/Flagg
 // Future sources plug in as more list items: announcements requiring
 // acknowledgment, training tasks, surveys.
 export default function ActionItems({ showEmpty = false }) {
-  const { member } = useCurrentMember();
+  const { member, isManager } = useCurrentMember();
   const queryClient = useQueryClient();
+
+  // managers: attendance auto-drafts waiting to be reviewed and issued
+  const { data: autoDrafts = [] } = useQuery({
+    queryKey: ['attendance-autodrafts', member?.id],
+    queryFn: () => base44.entities.DisciplineDocument.filter({ status: 'draft', source: 'attendance_auto' }),
+    enabled: !!member?.id && isManager,
+    placeholderData: [],
+  });
+  const { data: draftMembers = [] } = useQuery({
+    queryKey: ['autodraft-members', autoDrafts.map(d => d.teamMemberId).sort().join(',')],
+    queryFn: () => base44.entities.TeamMember.filter({ id: { $in: [...new Set(autoDrafts.map(d => d.teamMemberId))] } }),
+    enabled: autoDrafts.length > 0,
+    placeholderData: [],
+  });
+  const draftMemberName = (id) => {
+    const m = draftMembers.find(x => x.id === id);
+    return m ? `${m.preferredName || m.firstName} ${m.lastName}` : 'Team member';
+  };
 
   const { data: pendingDocs = [] } = useQuery({
     queryKey: ['my-discipline-docs', member?.id, 'pending'],
@@ -110,7 +128,7 @@ export default function ActionItems({ showEmpty = false }) {
 
   const typeLabel = (id) => types.find(t => t.id === id)?.label || 'Attendance infraction';
   const flagCount = useFlagInboxCount();
-  const itemCount = pendingDocs.length + appealable.length + policyItems.length + pendingHours.length + flagCount;
+  const itemCount = pendingDocs.length + appealable.length + policyItems.length + pendingHours.length + flagCount + autoDrafts.length;
 
   if (!member || (itemCount === 0 && !showEmpty)) return null;
 
@@ -141,6 +159,20 @@ export default function ActionItems({ showEmpty = false }) {
                   <p className="text-sm font-medium">Document requires your signature</p>
                   <p className="text-xs text-muted-foreground">
                     {entryTypeLabel(d.entryType)} · issued {d.issuedAt ? format(new Date(d.issuedAt), 'MMM d') : ''}
+                  </p>
+                </div>
+                <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
+              </Link>
+            ))}
+
+            {autoDrafts.map(d => (
+              <Link key={d.id} to={`/team-members?edit=${d.teamMemberId}&tab=file`}
+                    className="flex items-center gap-3 p-3 rounded-lg border border-amber-300 dark:border-amber-700 hover:bg-accent/40 transition-colors">
+                <PenLine className="w-4 h-4 text-amber-500 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">Discipline draft ready — {draftMemberName(d.teamMemberId)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {entryTypeLabel(d.entryType)} · auto-drafted from attendance points — review, then issue or void
                   </p>
                 </div>
                 <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />

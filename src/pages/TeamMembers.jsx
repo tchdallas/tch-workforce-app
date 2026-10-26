@@ -186,6 +186,7 @@ export default function TeamMembers() {
 
   // Modal state driven by URL search params for native back-button support
   const editId = searchParams.get('edit');
+  const initialTab = searchParams.get('tab'); // e.g. notification -> File tab
   const isNew = searchParams.get('new') === '1';
   const modalOpen = isNew || !!editId;
 
@@ -691,6 +692,7 @@ export default function TeamMembers() {
 
       <TeamMemberModal
         open={modalOpen}
+        initialTab={initialTab}
         onClose={() => { setFailedDraft(null); closeModal(); }}
         member={editMember || (isNew ? failedDraft : null)}
         locations={locations}

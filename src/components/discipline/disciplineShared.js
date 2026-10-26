@@ -11,6 +11,21 @@ export const ENTRY_TYPES = [
 ];
 
 export const entryTypeLabel = (v) => ENTRY_TYPES.find(t => t.value === v)?.label || v;
+
+// Progressive ladder position. A doc counts toward the ladder once it's real
+// (issued/signed/refused — drafts and voided docs don't advance anyone).
+export const ENTRY_RANK = {
+  informational: 0, documented_coaching: 1, written_warning: 2,
+  final_written_warning: 3, suspension_pending_investigation: 4, separation: 5,
+};
+export const ladderStanding = (docs, natures = []) => {
+  const counted = (docs || []).filter(d =>
+    ['issued', 'acknowledged', 'refused'].includes(d.status)
+    && (natures.length === 0 || (d.natures || []).some(n => natures.includes(n))));
+  const highest = counted.reduce((m, d) => Math.max(m, ENTRY_RANK[d.entryType] ?? 0), -1);
+  const next = ENTRY_TYPES[Math.min(highest + 1, ENTRY_TYPES.length - 1)].value;
+  return { highest, next, counted };
+};
 export const entryTypeShort = (v) => ENTRY_TYPES.find(t => t.value === v)?.short || v;
 
 export const NATURES = [

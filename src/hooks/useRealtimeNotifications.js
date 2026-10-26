@@ -81,6 +81,7 @@ export default function useRealtimeNotifications() {
               attendance_appeal_filed: [['attendance-appeals']],
               attendance_appeal_decided: [['my-infractions'], ['attendance-roster']],
               discipline_issued: [['my-discipline-docs'], ['discipline-docs']],
+              discipline_draft: [['discipline-docs'], ['attendance-autodrafts']],
               discipline_signed: [['discipline-docs']],
               discipline_refused: [['discipline-docs']],
               timesheet: [['my-pending-time-entries']],

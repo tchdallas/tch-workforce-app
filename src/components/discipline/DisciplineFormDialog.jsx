@@ -12,7 +12,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
-import { ENTRY_TYPES, NATURES, entryTypeLabel } from './disciplineShared';
+import { ENTRY_TYPES, NATURES, entryTypeLabel, ENTRY_RANK, ladderStanding } from './disciplineShared';
+import { cn } from '@/lib/utils';
 
 // Create or edit a DRAFT Performance Documentation, then optionally issue it
 // (typed-name signature). Field names mirror the paper form.
@@ -51,6 +52,10 @@ export default function DisciplineFormDialog({ memberId, memberName, existing, p
 
   const availableTypes = ENTRY_TYPES.filter(t => !t.adminOnly || isAdmin);
   const isSPI = form.entryType === 'suspension_pending_investigation';
+
+  // where this member stands on the progressive ladder for the chosen
+  // categories (no categories picked yet = their overall standing)
+  const ladder = ladderStanding(priorDocs, form.natures);
 
   const toggleNature = (v) =>
     setForm(f => ({
@@ -161,6 +166,42 @@ export default function DisciplineFormDialog({ memberId, memberName, existing, p
                   {n.label}
                 </label>
               ))}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-border bg-muted/30 p-3">
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">
+              Progressive ladder{form.natures.length > 0 ? ` — ${form.natures.map(n => NATURES.find(x => x.value === n)?.label).join(', ')}` : ' — all categories'}
+            </p>
+            <div className="flex flex-wrap items-center gap-1">
+              {ENTRY_TYPES.map((t, i) => (
+                <React.Fragment key={t.value}>
+                  {i > 0 && <span className="text-muted-foreground/50 text-xs">→</span>}
+                  <span className={cn('text-[11px] px-1.5 py-0.5 rounded border',
+                    ENTRY_RANK[t.value] <= ladder.highest
+                      ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700'
+                      : t.value === ladder.next
+                        ? 'border-primary text-primary font-medium'
+                        : 'border-transparent text-muted-foreground')}>
+                    {t.short}
+                  </span>
+                </React.Fragment>
+              ))}
+            </div>
+            <div className="flex items-center justify-between gap-2 mt-1.5">
+              <p className="text-[11px] text-muted-foreground">
+                {ladder.highest < 0
+                  ? 'No prior steps in this category.'
+                  : `Current step: ${entryTypeLabel(ENTRY_TYPES[ladder.highest].value)} (${ladder.counted.length} prior entr${ladder.counted.length === 1 ? 'y' : 'ies'}).`}
+                {' '}Suggested next: <span className="font-medium text-foreground">{entryTypeLabel(ladder.next)}</span>
+                {['suspension_pending_investigation', 'separation'].includes(ladder.next) && !isAdmin ? ' (requires an admin)' : ''}
+              </p>
+              {form.entryType !== ladder.next && (!['suspension_pending_investigation', 'separation'].includes(ladder.next) || isAdmin) && (
+                <Button type="button" size="sm" variant="outline" className="h-6 text-[11px] shrink-0"
+                        onClick={() => setForm(f => ({ ...f, entryType: ladder.next }))}>
+                  Use suggested
+                </Button>
+              )}
             </div>
           </div>
 

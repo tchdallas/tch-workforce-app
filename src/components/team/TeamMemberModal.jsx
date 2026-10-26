@@ -22,7 +22,7 @@ const defaultMember = {
   startDate: '', notes: '', permissionLevel: 'team_member',
 };
 
-export default function TeamMemberModal({ open, onClose, member, locations, roles, onSave, existingMembers = [] }) {
+export default function TeamMemberModal({ open, onClose, member, locations, roles, onSave, existingMembers = [], initialTab = null }) {
   const [form, setForm] = useState(defaultMember);
   const [tmNumberError, setTmNumberError] = useState('');
   const [tab, setTab] = useState('basic');
@@ -54,8 +54,9 @@ export default function TeamMemberModal({ open, onClose, member, locations, role
     if (member) setForm({ ...defaultMember, ...member });
     else setForm(defaultMember);
     setTmNumberError('');
-    setTab('basic');
-  }, [member, open]);
+    // deep links (e.g. a discipline-draft notification) may land on a tab
+    setTab(open && initialTab ? initialTab : 'basic');
+  }, [member, open, initialTab]);
 
   const handleSave = () => {
     if (form.tmNumber?.trim()) {
