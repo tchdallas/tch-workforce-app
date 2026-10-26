@@ -111,8 +111,8 @@ export default function Dashboard() {
         <ActionItems showEmpty />
 
         <div className="grid grid-cols-2 gap-3 mb-6">
-          <StatCard label="My Shifts Today" value={myShiftsToday.length} icon={Calendar} />
-          <StatCard label="Open Shifts" value={openShifts.length} icon={HandHelping} variant={openShifts.length > 0 ? 'warning' : 'default'} />
+          <StatCard label="My Shifts Today" value={myShiftsToday.length} icon={Calendar} to="/my-schedule" />
+          <StatCard label="Open Shifts" value={openShifts.length} icon={HandHelping} variant={openShifts.length > 0 ? 'warning' : 'default'} to="/open-shifts" />
         </div>
 
         <div className="grid lg:grid-cols-2 gap-4">
@@ -136,7 +136,7 @@ export default function Dashboard() {
               ) : (
                 <div className="space-y-2 max-h-48 overflow-y-auto">
                   {myUpcoming.map(shift => (
-                    <div key={shift.id} className="flex items-center gap-2 p-2 rounded-lg bg-muted/50">
+                    <Link key={shift.id} to="/my-schedule" className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
                       <div className="w-1.5 h-8 rounded-full bg-primary" />
                       <div>
                         <p className="text-sm font-medium">{format(new Date(shift.startDateTime), 'EEE, MMM d')}</p>
@@ -144,7 +144,7 @@ export default function Dashboard() {
                           {format(new Date(shift.startDateTime), 'h:mm a')} - {formatEndTime(shift.startDateTime, shift.endDateTime)}
                         </p>
                       </div>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               )}
@@ -179,10 +179,10 @@ export default function Dashboard() {
 
       {/* Stats Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        <StatCard label="Today's Shifts" value={todayShifts.length} icon={Calendar} />
-        <StatCard label="Open Shifts" value={openShifts.length} icon={HandHelping} variant={openShifts.length > 0 ? 'warning' : 'default'} />
-        <StatCard label="Pending Requests" value={pendingRequests} icon={ClipboardList} variant={pendingRequests > 0 ? 'accent' : 'default'} />
-        <StatCard label="Active Callouts" value={activeCallouts.length} icon={AlertTriangle} variant={activeCallouts.length > 0 ? 'danger' : 'default'} />
+        <StatCard label="Today's Shifts" value={todayShifts.length} icon={Calendar} to="/schedule" />
+        <StatCard label="Open Shifts" value={openShifts.length} icon={HandHelping} variant={openShifts.length > 0 ? 'warning' : 'default'} to="/open-shifts" />
+        <StatCard label="Pending Requests" value={pendingRequests} icon={ClipboardList} variant={pendingRequests > 0 ? 'accent' : 'default'} to="/requests" />
+        <StatCard label="Active Callouts" value={activeCallouts.length} icon={AlertTriangle} variant={activeCallouts.length > 0 ? 'danger' : 'default'} to="/callouts" />
       </div>
 
       <div className="grid lg:grid-cols-2 gap-4">
@@ -208,7 +208,7 @@ export default function Dashboard() {
             ) : (
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {draftShifts.slice(0, 5).map(shift => (
-                  <div key={shift.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/50">
+                  <Link key={shift.id} to="/schedule" className="flex items-center justify-between p-2 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
                     <div className="flex items-center gap-2">
                       <div className="w-1.5 h-8 rounded-full bg-amber-400" />
                       <div>
@@ -218,7 +218,7 @@ export default function Dashboard() {
                         </p>
                       </div>
                     </div>
-                  </div>
+                  </Link>
                 ))}
               </div>
             )}
@@ -243,7 +243,7 @@ export default function Dashboard() {
             ) : (
               <div className="space-y-2">
                 {activeCallouts.slice(0, 4).map(callout => (
-                  <div key={callout.id} className="flex items-center gap-2 p-2 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/30">
+                  <Link key={callout.id} to="/callouts" className="flex items-center gap-2 p-2 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/30 hover:bg-red-100 dark:hover:bg-red-950/40 transition-colors">
                     <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
                     <div className="min-w-0">
                       <p className="text-sm font-medium truncate">{callout.reason || 'Callout submitted'}</p>
@@ -254,7 +254,7 @@ export default function Dashboard() {
                     <Badge variant="outline" className="ml-auto text-xs shrink-0 border-red-300 text-red-600 dark:text-red-400">
                       {callout.status?.replace(/_/g, ' ')}
                     </Badge>
-                  </div>
+                  </Link>
                 ))}
               </div>
             )}
@@ -279,23 +279,23 @@ export default function Dashboard() {
             ) : (
               <div className="space-y-2">
                 {filteredTimeOff.slice(0, 2).map(req => (
-                  <div key={req.id} className="flex items-center gap-2 p-2 rounded-lg bg-muted/50">
+                  <Link key={req.id} to="/requests" className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
                     <Clock className="w-4 h-4 text-blue-500 shrink-0" />
                     <div className="min-w-0">
                       <p className="text-sm font-medium">Time Off Request</p>
                       <p className="text-xs text-muted-foreground">{req.reason || 'No reason provided'}</p>
                     </div>
                     <Badge variant="secondary" className="ml-auto text-xs">Pending</Badge>
-                  </div>
+                  </Link>
                 ))}
                 {filteredTrades.slice(0, 2).map(req => (
-                  <div key={req.id} className="flex items-center gap-2 p-2 rounded-lg bg-muted/50">
+                  <Link key={req.id} to="/requests" className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
                     <ClipboardList className="w-4 h-4 text-amber-500 shrink-0" />
                     <div className="min-w-0">
                       <p className="text-sm font-medium">Shift Trade Request</p>
                     </div>
                     <Badge variant="secondary" className="ml-auto text-xs">Pending</Badge>
-                  </div>
+                  </Link>
                 ))}
               </div>
             )}

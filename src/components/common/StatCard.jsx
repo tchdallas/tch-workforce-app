@@ -1,8 +1,9 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
-export default function StatCard({ label, value, icon: Icon, variant = 'default', onClick }) {
+export default function StatCard({ label, value, icon: Icon, variant = 'default', onClick, to }) {
   const variants = {
     default: 'border-border',
     warning: 'border-amber-400/30 bg-amber-50 dark:bg-amber-950/20',
@@ -11,10 +12,12 @@ export default function StatCard({ label, value, icon: Icon, variant = 'default'
     accent: 'border-primary/20 bg-primary/5',
   };
 
-  return (
+  // `to` makes the tile a real link (the pointer cursor finally keeps its promise)
+  const card = (
     <Card
       className={cn(
-        "p-4 cursor-pointer hover:shadow-md transition-shadow",
+        "p-4 transition-shadow",
+        (to || onClick) && "cursor-pointer hover:shadow-md",
         variants[variant]
       )}
       onClick={onClick}
@@ -32,4 +35,5 @@ export default function StatCard({ label, value, icon: Icon, variant = 'default'
       </div>
     </Card>
   );
+  return to ? <Link to={to} className="block">{card}</Link> : card;
 }

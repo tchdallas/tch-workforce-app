@@ -4,12 +4,14 @@ import { base44 } from '@/api/base44Client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Search, Activity } from 'lucide-react';
+import { Search, Activity, ChevronRight } from 'lucide-react';
+import AuditDetailDialog from '@/components/common/AuditDetailDialog';
 import PageHeader from '@/components/common/PageHeader';
 import { format } from 'date-fns';
 
 export default function AuditLog() {
   const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState(null);
 
   const { data: logs = [] } = useQuery({
     queryKey: ['audit-logs'],
@@ -59,7 +61,8 @@ export default function AuditLog() {
           </div>
         )}
         {filtered.map(log => (
-          <Card key={log.id}>
+          <Card key={log.id} className="cursor-pointer hover:bg-accent/40 transition-colors"
+                onClick={() => setSelected(log)}>
             <CardContent className="p-3 flex items-start gap-3">
               <Badge className={`text-[10px] border-0 mt-0.5 shrink-0 ${actionColors[log.action?.toLowerCase()] || 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}`}>
                 {log.action}
@@ -78,10 +81,13 @@ export default function AuditLog() {
                   {format(new Date(log.created_date), 'MMM d, h:mm a')}
                 </p>
               )}
+              <ChevronRight className="w-4 h-4 text-muted-foreground/50 shrink-0 self-center" />
             </CardContent>
           </Card>
         ))}
       </div>
+
+      {selected && <AuditDetailDialog log={selected} onClose={() => setSelected(null)} />}
     </div>
   );
 }
