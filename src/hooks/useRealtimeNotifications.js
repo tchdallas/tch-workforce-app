@@ -66,6 +66,27 @@ export default function useRealtimeNotifications() {
               queryClient.invalidateQueries({ queryKey: ['swap-posts'] });
               queryClient.invalidateQueries({ queryKey: ['swap-replies'] });
             }
+            // A notification means someone ELSE changed something that concerns
+            // me — refresh the screens that show it, so their change appears in
+            // seconds instead of waiting out the cache.
+            const REFRESH_BY_TYPE = {
+              schedule_updated: [['schedule-shifts'], ['dashboard-shifts']],
+              upcoming_shift: [['schedule-shifts'], ['dashboard-shifts']],
+              shift_offered: [['swap-posts'], ['schedule-shifts'], ['dashboard-shifts']],
+              callout: [['all-callouts'], ['dashboard-callouts']],
+              request_status: [['schedule-shifts'], ['dashboard-shifts']],
+              announcement: [['my-announcements']],
+              attendance_point_issued: [['my-infractions'], ['attendance-roster']],
+              attendance_point_excused: [['my-infractions'], ['attendance-roster']],
+              attendance_appeal_filed: [['attendance-appeals']],
+              attendance_appeal_decided: [['my-infractions'], ['attendance-roster']],
+              discipline_issued: [['my-discipline-docs'], ['discipline-docs']],
+              discipline_signed: [['discipline-docs']],
+              discipline_refused: [['discipline-docs']],
+              timesheet: [['my-pending-time-entries']],
+            };
+            (REFRESH_BY_TYPE[payload.new.type] || []).forEach((key) =>
+              queryClient.invalidateQueries({ queryKey: key }));
             // my messaging mute changed — swap the composer for the banner (or back)
             if (payload.new.type === 'messaging_muted' || payload.new.type === 'messaging_unmuted') {
               queryClient.invalidateQueries({ queryKey: ['messaging-mutes'] });

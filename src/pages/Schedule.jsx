@@ -938,7 +938,7 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
         <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setImportModal(true)}>
           <Upload className="w-4 h-4" /> Import Paylocity
         </Button>
-        <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShiftModal({ open: true, shift: null })}>
+        <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShiftModal({ open: true, shift: selectedLocation && selectedLocation !== 'all' ? { locationId: selectedLocation } : null })}>
           <Plus className="w-4 h-4" /> Add Shift
         </Button>
       </PageHeader>

@@ -176,9 +176,19 @@ export default function ShiftModal({ open, onClose, shift, locations, roles, tea
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">Location</Label>
-              <div className="flex items-center h-9 px-3 rounded-md border border-input bg-muted/40 text-sm text-muted-foreground">
-                {locations.find(l => l.id === form.locationId)?.name || '—'}
-              </div>
+              {/* was a read-only display: opening via "Add Shift" (no grid cell
+                  to inherit from) left it stuck on an un-fillable dash */}
+              <Select value={form.locationId || ''} onValueChange={(v) => setForm(f => {
+                const roleStillValid = !f.roleId || roles.some(r => r.id === f.roleId && isRoleAvailableAtLocation(r, v));
+                return { ...f, locationId: v, roleId: roleStillValid ? f.roleId : '' };
+              })}>
+                <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                <SelectContent>
+                  {locations.filter(l => l.status === 'active' || l.id === form.locationId).map(l => (
+                    <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label className="text-xs">Role</Label>
