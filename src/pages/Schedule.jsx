@@ -16,6 +16,7 @@ import ViewDropdown, { getViewConfig } from '@/components/schedule/ViewDropdown'
 import ImportPaylocityModal from '@/components/schedule/ImportPaylocityModal';
 import PasteRoleWarningDialog from '@/components/schedule/PasteRoleWarningDialog';
 import PasteConflictDialog from '@/components/schedule/PasteConflictDialog';
+import RemoveShiftDialog from '@/components/schedule/RemoveShiftDialog';
 import PublishButton from '@/components/schedule/PublishButton';
 import DayViewSummary from '@/components/schedule/DayViewSummary';
 import DayTimeline from '@/components/schedule/DayTimeline';
@@ -420,32 +421,59 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['schedule-shifts'] }),
   });
 
-  const deleteShift = useMutation({
-    mutationFn: (id) => base44.entities.Shift.delete(id),
-    onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: ['schedule-shifts'] });
-      const queryKey = ['schedule-shifts', startStr, endStr, selectedLocation];
-      const prev = queryClient.getQueryData(queryKey);
-      const prevShift = (prev || []).find(s => s.id === id);
-      if (prevShift) pushUndo({ type: 'delete', id, data: prevShift });
-      queryClient.setQueryData(queryKey, old => (old || []).filter(s => s.id !== id));
-      setShiftModal({ open: false, shift: null });
-      setSelectedShiftId(null);
-      return { prev, queryKey };
-    },
-    onSuccess: (_, id) => {
-      const prevShift = undoStack.length > 0 && undoStack[undoStack.length - 1]?.id === id
-        ? undoStack[undoStack.length - 1].data : null;
-      const tm = prevShift ? teamMembers.find(t => t.id === prevShift.teamMemberId) : null;
-      const tmName = tm ? `${tm.preferredName || tm.firstName} ${tm.lastName}` : 'Open';
-      logShiftEvent('shift_deleted', id, `Shift deleted (was assigned to ${tmName})`);
-      toast.success('Shift deleted');
-    },
-    onError: (_, __, ctx) => {
-      if (ctx?.prev) queryClient.setQueryData(ctx.queryKey, ctx.prev);
-    },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ['schedule-shifts'] }),
-  });
+  // Removing shifts: always asks for a reason. Drafts hard-delete (allowed by
+  // RLS); published shifts CANNOT be hard-deleted by design — they get
+  // status='cancelled' instead (the grid hides cancelled, the member is
+  // notified by the DB trigger, and the record survives in history). The old
+  // path silently failed on published shifts: the optimistic removal was
+  // rolled back with no message, which read as "delete doesn't work".
+  const [removeAsk, setRemoveAsk] = useState(null); // array of shift ids, or null
+  const [removing, setRemoving] = useState(false);
+  const confirmRemove = async (reason) => {
+    const targets = shifts.filter(sh => (removeAsk || []).includes(sh.id));
+    if (!targets.length) { setRemoveAsk(null); return; }
+    setRemoving(true);
+    const tmNameOf = (sh) => {
+      const tm = teamMembers.find(t => t.id === sh.teamMemberId);
+      return tm ? `${tm.preferredName || tm.firstName} ${tm.lastName}` : 'Open';
+    };
+    const deletedDrafts = [];
+    let cancelled = 0;
+    const failures = [];
+    for (const sh of targets) {
+      try {
+        if (sh.status === 'draft') {
+          await base44.entities.Shift.delete(sh.id);
+          deletedDrafts.push(sh);
+          logShiftEvent('shift_deleted', sh.id, `Draft deleted — ${reason} (was ${tmNameOf(sh)})`);
+        } else {
+          await base44.entities.Shift.update(sh.id, { status: 'cancelled' });
+          cancelled += 1;
+          logShiftEvent('shift_cancelled', sh.id, `Cancelled — ${reason} (was ${tmNameOf(sh)})`,
+            { status: sh.status }, { status: 'cancelled' });
+        }
+      } catch (e) {
+        failures.push(`${tmNameOf(sh)}: ${e.message || 'failed'}`);
+      }
+    }
+    if (deletedDrafts.length === 1) {
+      pushUndo({ type: 'delete', id: deletedDrafts[0].id, data: deletedDrafts[0] });
+    } else if (deletedDrafts.length > 1) {
+      pushUndo({ type: 'batch', label: 'bulk delete',
+        entries: deletedDrafts.map(sh => ({ type: 'delete', id: sh.id, data: sh })) });
+    }
+    setRemoving(false);
+    setRemoveAsk(null);
+    setShiftModal({ open: false, shift: null });
+    setSelectedShiftId(null);
+    setSelectedShiftIds(new Set());
+    queryClient.invalidateQueries({ queryKey: ['schedule-shifts'] });
+    const bits = [];
+    if (deletedDrafts.length) bits.push(`${deletedDrafts.length} draft${deletedDrafts.length === 1 ? '' : 's'} deleted`);
+    if (cancelled) bits.push(`${cancelled} published shift${cancelled === 1 ? '' : 's'} cancelled`);
+    if (bits.length) toast.success(bits.join(' · '));
+    if (failures.length) toast.error(`Couldn't remove ${failures.length}: ${failures[0]}`);
+  };
 
   // Track which shifts are currently visible in the filtered grid view
   const [filteredShiftIds, setFilteredShiftIds] = useState(new Set());
@@ -859,37 +887,9 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault();
         if (selectedShiftIds.size > 1) {
-          const targets = shifts.filter(s => selectedShiftIds.has(s.id));
-          const total = targets.length;
-          let done = 0;
-          const toastId = `bulk-delete-${Date.now()}`;
-          toast.loading(`Deleting 0 / ${total} shifts…`, { id: toastId, duration: Infinity });
-          (async () => {
-            const deleted = [];
-            const BATCH = 10;
-            for (let i = 0; i < targets.length; i += BATCH) {
-              const chunk = targets.slice(i, i + BATCH);
-              const results = await Promise.all(chunk.map(s =>
-                base44.entities.Shift.delete(s.id).then(() => s).catch(() => null)
-              ));
-              deleted.push(...results.filter(Boolean));
-              done += chunk.length;
-              toast.loading(`Deleting ${Math.min(done, total)} / ${total} shifts…`, { id: toastId, duration: Infinity });
-            }
-            if (deleted.length) {
-              pushUndo({
-                type: 'batch',
-                label: 'bulk delete',
-                entries: deleted.map(s => ({ type: 'delete', id: s.id, data: s })),
-              });
-            }
-            queryClient.invalidateQueries({ queryKey: ['schedule-shifts'] });
-            toast.success(`${deleted.length} shifts deleted — Ctrl+Z to undo`, { id: toastId, duration: 3000 });
-            setSelectedShiftIds(new Set());
-            setSelectedShiftId(null);
-          })();
+          setRemoveAsk([...selectedShiftIds]);
         } else if (selectedShift && !e.metaKey) {
-          deleteShift.mutate(selectedShift.id);
+          setRemoveAsk([selectedShift.id]);
         }
       } else if (e.key === 'Escape') {
         setSelectedShiftId(null);
@@ -899,7 +899,7 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selectedShiftId, selectedShiftIds, shifts, clipboard, handleCopy, handleCut, handlePaste, deleteShift, handleUndo, handleRedo, pushUndo, queryClient]); // eslint-disable-line
+  }, [selectedShiftId, selectedShiftIds, shifts, clipboard, handleCopy, handleCut, handlePaste, handleUndo, handleRedo, pushUndo, queryClient]); // eslint-disable-line
 
   const draftCount = shifts.filter(s => s.status === 'draft').length;
   const filteredDraftCount = shifts.filter(s => s.status === 'draft' && filteredShiftIds.has(s.id)).length;
@@ -1115,7 +1115,7 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
           onCopy={handleCopy}
           onCut={handleCut}
           onPaste={handlePaste}
-          onDelete={(id) => deleteShift.mutate(id)}
+          onDelete={(id) => setRemoveAsk([id])}
           onPublish={handlePublishToggle}
           clipboard={clipboard}
           onDrop={handleDrop}
@@ -1165,7 +1165,15 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
         teamMembers={teamMembers}
         shifts={shifts}
         onSave={handleSave}
-        onDelete={(id) => deleteShift.mutate(id)}
+        onDelete={(id) => setRemoveAsk([id])}
+      />
+
+      <RemoveShiftDialog
+        ids={removeAsk}
+        shifts={shifts}
+        busy={removing}
+        onConfirm={confirmRemove}
+        onClose={() => setRemoveAsk(null)}
       />
 
       <PasteRoleWarningDialog
