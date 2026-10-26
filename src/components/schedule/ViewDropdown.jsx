@@ -42,7 +42,7 @@ export function getViewLabel(viewKey) {
   if (viewKey === 'timeline_day') return 'Day Timeline';
   const opt = ALL_OPTIONS.find(o => o.value === viewKey);
   const [group] = (viewKey || '').split('_');
-  const groupLabel = group === 'role' ? 'Area' : 'Employee';
+  const groupLabel = group === 'role' ? 'Area' : 'Team Member';
   return opt ? `${opt.label} by ${groupLabel}` : 'Week by Area';
 }
 
@@ -95,7 +95,7 @@ export default function ViewDropdown({ value = 'role_week', onChange }) {
 
           <div className="my-1.5 border-t border-border" />
 
-          <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">View by Employee</p>
+          <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">View by Team Member</p>
           {MEMBER_OPTIONS.map(opt => (
             <button
               key={opt.value}

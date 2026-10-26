@@ -205,12 +205,21 @@ export default function ScheduleGrid({
     onPublish: readOnly ? undefined : onPublish,
     canPaste: !readOnly && !!clipboard,
     compact: true,
+    showRole: viewMode !== 'role', // member rows label chips by role instead of name
   });
 
   const renderCell = (day, cellKey, filterFn, addContext, visibleShiftIds) => {
     // sort by start time so a newly-added shift drops into the right spot
     const dayShifts = getShiftsForDay(day, filterFn)
       .slice().sort((a, b) => new Date(a.startDateTime) - new Date(b.startDateTime));
+    // Role view: this person's shifts under OTHER roles, shown as muted ghost
+    // chips so a row never reads as "free" when they're working elsewhere
+    // (e.g. Glenn's Cashier row shows his Host shift). Only role-grouped rows
+    // carry both ids, so this stays empty everywhere else.
+    const ghostShifts = (addContext?.roleId && addContext?.teamMemberId)
+      ? getShiftsForDay(day, sh => sh.teamMemberId === addContext.teamMemberId && sh.roleId !== addContext.roleId)
+          .slice().sort((a, b) => new Date(a.startDateTime) - new Date(b.startDateTime))
+      : [];
     const isDragOver = !readOnly && dragOverCell === cellKey;
     const isPasteMode = !readOnly && !!clipboard;
     // subtle availability cue for member rows: their weekly type for this day
@@ -251,6 +260,24 @@ export default function ScheduleGrid({
           {dayShifts.map(shift => (
             <ShiftCard key={shift.id} shift={shift} {...shiftCardProps(shift, visibleShiftIds)} />
           ))}
+          {ghostShifts.map(g => {
+            const gr = getRole(g.roleId);
+            return (
+              <button
+                key={'ghost-' + g.id}
+                type="button"
+                title={`Also scheduled as ${gr?.name || 'another role'} — click to open`}
+                onClick={(e) => { e.stopPropagation(); onShiftClick?.(g); }}
+                className="w-full rounded-md border border-dashed border-border bg-muted/30 px-1.5 py-0.5 text-left opacity-70 hover:opacity-100 transition-opacity"
+                style={{ borderLeftWidth: '3px', borderLeftStyle: 'solid', borderLeftColor: gr?.color || '#6366f1' }}
+              >
+                <p className="text-[9px] font-medium truncate text-muted-foreground">@ {gr?.name || 'Other role'}</p>
+                <p className="text-[9px] text-muted-foreground truncate">
+                  {format(new Date(g.startDateTime), 'h:mm')}–{format(new Date(g.endDateTime), 'h:mma')}
+                </p>
+              </button>
+            );
+          })}
         </div>
         {!readOnly && (
           <button

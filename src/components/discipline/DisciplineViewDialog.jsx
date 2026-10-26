@@ -130,12 +130,12 @@ export default function DisciplineViewDialog({ doc, memberName, perspective, isA
           <Field label="Why this is important (or what policy was violated)" value={doc.whyImportant} />
           <Field label="How the behavior can be corrected going forward" value={doc.correctionPlan} />
           <Field label="Consequence if behavior continues" value={doc.consequence} />
-          <Field label="Employee comments" value={doc.employeeComments} />
+          <Field label="Team member comments" value={doc.employeeComments} />
 
           <div className="rounded-lg border p-3 space-y-2">
             <p className="text-[11px] text-muted-foreground">{SIGNATURE_DISCLAIMER}</p>
             <SignatureLine role="Issuing Sup./Mgr." name={doc.issuerSignedName} at={doc.issuedAt} />
-            <SignatureLine role="Employee" name={doc.memberSignedName} at={doc.memberSignedAt} refusedAt={doc.memberRefusedAt} />
+            <SignatureLine role="Team Member" name={doc.memberSignedName} at={doc.memberSignedAt} refusedAt={doc.memberRefusedAt} />
             {(doc.witnessSignedName || canWitness) && (
               <SignatureLine role="Witness" name={doc.witnessSignedName} at={doc.witnessSignedAt} />
             )}

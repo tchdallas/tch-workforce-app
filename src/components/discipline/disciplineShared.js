@@ -39,5 +39,5 @@ export const sentimentMeta = (v) => SENTIMENTS.find(s => s.value === v) || SENTI
 
 // legal language lifted verbatim from the paper form
 export const SIGNATURE_DISCLAIMER =
-  "Employee's signature serves as recognition that the discussion occurred, and not as an agreement with the contents. " +
-  'Failure to sign this document does not exclude the employee from this disciplinary action.';
+  "Team member's signature serves as recognition that the discussion occurred, and not as an agreement with the contents. " +
+  'Failure to sign this document does not exclude the team member from this disciplinary action.';

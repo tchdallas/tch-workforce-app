@@ -242,7 +242,7 @@ export default function ImportPaylocityModal({ open, onClose, onImported }) {
             <>
               <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
                 <p className="text-sm text-muted-foreground">
-                  Upload a Paylocity <strong>"Display Schedule"</strong> CSV export. Shifts are created as <strong>drafts</strong> and matched by <strong>TM # (Employee ID)</strong>. Unrecognized employees are skipped.
+                  Upload a Paylocity <strong>"Display Schedule"</strong> CSV export. Shifts are created as <strong>drafts</strong> and matched by <strong>TM # (Employee ID)</strong>. Unrecognized team members are skipped.
                 </p>
                 <button
                   type="button"
@@ -288,7 +288,7 @@ export default function ImportPaylocityModal({ open, onClose, onImported }) {
                   {preview.skipped.length > 0 && (
                     <div className="space-y-1.5">
                       <p className="text-xs font-medium text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                        <AlertTriangle className="w-3 h-3" /> Unrecognized employees (will be skipped):
+                        <AlertTriangle className="w-3 h-3" /> Unrecognized team members (will be skipped):
                       </p>
                       <div className="max-h-36 overflow-y-auto space-y-1 rounded border bg-amber-50 dark:bg-amber-900/10 p-2">
                         {/* Deduplicate skipped entries */}
@@ -341,7 +341,7 @@ export default function ImportPaylocityModal({ open, onClose, onImported }) {
               {results.skipped.length > 0 && (
                 <div className="space-y-1.5">
                   <p className="text-xs font-medium text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                    <AlertTriangle className="w-3 h-3" /> {results.skipped.length} employee{results.skipped.length > 1 ? 's' : ''} skipped (not in system):
+                    <AlertTriangle className="w-3 h-3" /> {results.skipped.length} team member{results.skipped.length > 1 ? 's' : ''} skipped (not in system):
                   </p>
                   <div className="max-h-36 overflow-y-auto space-y-1 rounded border bg-amber-50 dark:bg-amber-900/10 p-2">
                     {[...new Set(results.skipped)].map((msg, i) => (

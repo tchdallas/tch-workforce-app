@@ -14,6 +14,7 @@ import ShiftContextMenu from './ShiftContextMenu';
 export default function ShiftCard({
   shift, role, teamMember, location, onClick, compact = false,
   selected, onCopy, onCut, onPaste, onDelete, onPublish, canPaste, readOnly,
+  showRole = false, // team-member view: the row names the person, so the chip names the ROLE
 }) {
   const roleColor = role?.color || '#6366f1';
   const isOpen = shift.shiftType === 'open';
@@ -72,7 +73,7 @@ export default function ShiftCard({
       <div className="flex items-start justify-between gap-1">
         <div className="min-w-0 flex-1">
           <p className={cn("font-medium truncate", compact ? "text-[10px]" : "text-xs")}>
-            {displayName}
+            {showRole && !isOpen ? (role?.name || displayName) : displayName}
           </p>
           <p className={cn("text-muted-foreground", compact ? "text-[9px]" : "text-[11px]")}>
             {format(new Date(shift.startDateTime), 'h:mm a')} – {formatEndTime(shift.startDateTime, shift.endDateTime)}
