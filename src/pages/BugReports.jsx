@@ -7,6 +7,7 @@ import { useCurrentMember } from '@/hooks/useCurrentMember';
 import PageHeader from '@/components/common/PageHeader';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -31,7 +32,7 @@ const SEV = {
   low: { label: 'Minor', cls: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400' },
 };
 
-function BugCard({ bug, name, memberId }) {
+function BugCard({ bug, name, memberId, isManager }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [notes, setNotes] = useState(bug.adminNotes || '');
@@ -153,7 +154,7 @@ ${errs}`;
               </div>
             )}
 
-            {(bug.consoleLog || []).length > 0 && (
+            {isManager && (bug.consoleLog || []).length > 0 && (
               <div>
                 <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">Recent console errors ({bug.consoleLog.length})</p>
                 <div className="rounded-md bg-muted/40 border border-border p-2 max-h-40 overflow-y-auto font-mono text-[11px] space-y-1">
@@ -166,6 +167,7 @@ ${errs}`;
               </div>
             )}
 
+            {isManager && (<>
             <div className="grid sm:grid-cols-[1fr_auto] gap-3 items-end pt-1">
               <div>
                 <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">Triage notes</p>
@@ -193,10 +195,56 @@ ${errs}`;
                 </Button>
               </a>
             </div>
+            </>)}
+
+            <Discussion reportId={bug.id} meId={memberId} />
           </div>
         )}
       </CardContent>
     </Card>
+  );
+}
+
+// Reporter <-> triage thread. Author names ride on each comment (snapshot),
+// so team members see who replied even though RLS hides manager rows.
+function Discussion({ reportId, meId }) {
+  const qc = useQueryClient();
+  const [draft, setDraft] = useState('');
+  const { data: comments = [] } = useQuery({
+    queryKey: ['bug-report-comments', reportId],
+    queryFn: () => base44.entities.BugReportComment.filter({ reportId }, 'created_date'),
+    placeholderData: [],
+  });
+  const send = useMutation({
+    mutationFn: () => base44.entities.BugReportComment.create({ reportId, authorId: meId, body: draft.trim() }),
+    onSuccess: () => { setDraft(''); qc.invalidateQueries({ queryKey: ['bug-report-comments', reportId] }); },
+    onError: (e) => toast.error(e.message || 'Could not post the reply'),
+  });
+  return (
+    <div className="pt-1">
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">
+        Discussion {comments.length > 0 && `(${comments.length})`}
+      </p>
+      <div className="space-y-2 max-h-56 overflow-y-auto">
+        {comments.length === 0 && (
+          <p className="text-xs text-muted-foreground">No replies yet — questions and updates land here, and both sides get notified.</p>
+        )}
+        {comments.map((c) => (
+          <div key={c.id} className={cn('rounded-lg border border-border px-3 py-2 text-sm', c.authorId === meId ? 'bg-primary/5' : 'bg-muted/40')}>
+            <p className="text-[11px] text-muted-foreground">
+              {c.authorId === meId ? 'You' : (c.authorName || 'Team')}
+              {' · '}{c.created_date ? format(new Date(c.created_date), 'MMM d, h:mm a') : ''}
+            </p>
+            <p className="whitespace-pre-wrap break-words">{c.body}</p>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-2 mt-2">
+        <Input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Reply…"
+          onKeyDown={(e) => { if (e.key === 'Enter' && draft.trim() && !send.isPending) send.mutate(); }} />
+        <Button size="sm" disabled={!draft.trim() || send.isPending} onClick={() => send.mutate()}>Reply</Button>
+      </div>
+    </div>
   );
 }
 
@@ -211,7 +259,7 @@ function Detail({ label, children }) {
 
 export default function BugReports() {
   const { data: teamMembers = [] } = useTeamMembers();
-  const { member } = useCurrentMember();
+  const { member, isManager } = useCurrentMember();
   const [filter, setFilter] = useState('open');
   const [kindFilter, setKindFilter] = useState('all'); // all | bug | feature
 
@@ -237,7 +285,10 @@ export default function BugReports() {
 
   return (
     <div className="max-w-3xl mx-auto">
-      <PageHeader title="Feedback" subtitle={`${openCount} open · ${featureCount} request${featureCount === 1 ? '' : 's'} · ${bugs.length} total`} />
+      <PageHeader title={isManager ? 'Feedback' : 'My Feedback'}
+        subtitle={isManager
+          ? `${openCount} open · ${featureCount} request${featureCount === 1 ? '' : 's'} · ${bugs.length} total`
+          : `${bugs.length} submitted · tap one to see its status and discuss · new reports go through the Feedback button`} />
 
       <div className="flex gap-2 mb-3 flex-wrap">
         {[['all', 'All types'], ['bug', 'Bugs'], ['feature', 'Requests']].map(([v, l]) => (
@@ -261,7 +312,7 @@ export default function BugReports() {
         <p className="text-sm text-muted-foreground text-center py-10">No reports here. 🎉</p>
       ) : (
         <div className="space-y-2">
-          {shown.map((b) => <BugCard key={b.id} bug={b} name={nameFor(b.reporterId)} memberId={member?.id} />)}
+          {shown.map((b) => <BugCard key={b.id} bug={b} name={nameFor(b.reporterId)} memberId={member?.id} isManager={isManager} />)}
         </div>
       )}
     </div>

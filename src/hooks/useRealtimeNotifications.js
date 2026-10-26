@@ -84,6 +84,8 @@ export default function useRealtimeNotifications() {
               discipline_signed: [['discipline-docs']],
               discipline_refused: [['discipline-docs']],
               timesheet: [['my-pending-time-entries']],
+              feedback_reply: [['bug-report-comments'], ['bug-reports']],
+              feedback_status: [['bug-reports']],
             };
             (REFRESH_BY_TYPE[payload.new.type] || []).forEach((key) =>
               queryClient.invalidateQueries({ queryKey: key }));

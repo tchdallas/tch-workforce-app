@@ -149,6 +149,7 @@ const ENTITIES = {
   DownPayPeriod: { table: 'down_pay_periods' },
   DownDispute: { table: 'down_disputes' },
   BugReport: { table: 'bug_reports' },
+  BugReportComment: { table: 'bug_report_comments' },
   // policies & procedures: the rulebook. Audience is roles AND clubs (both
   // required at publish); publishing and acknowledgment snapshots go through
   // publish_policy / publish_policy_update so the audience math stays server-side

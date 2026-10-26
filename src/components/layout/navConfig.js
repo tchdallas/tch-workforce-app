@@ -44,7 +44,7 @@ export const navGroups = [
   { label: 'Insights', color: '#f43f5e', items: [
     { label: 'Reports', icon: BarChart3, path: '/reports', managerOnly: true },
     { label: 'Audit Log', icon: Activity, path: '/audit-log', managerOnly: true },
-    { label: 'Feedback', icon: MessageSquarePlus, path: '/bug-reports', managerOnly: true },
+    { label: 'Feedback', icon: MessageSquarePlus, path: '/bug-reports' }, // everyone: reporters see their own + the discussion
   ] },
   { label: 'Setup', color: '#64748b', items: [
     { label: 'Locations', icon: MapPin, path: '/locations', managerOnly: true },
