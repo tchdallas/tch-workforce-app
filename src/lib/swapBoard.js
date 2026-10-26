@@ -195,6 +195,15 @@ export async function initiateSwap(postId, { counterpartId = null, shiftId = nul
   if (error) throw error;
 }
 
+// One-tap claim by a VIEWER (not the poster): giveaway -> instantly theirs
+// (or pending manager); trade -> proposes one of their own shifts, poster
+// accepts. No reply required; chat stays optional.
+export async function claimSwap(postId, { shiftId = null, requireApproval = true } = {}) {
+  const { error } = await supabase.rpc('swap_post_claim',
+    { p_post: postId, p_shift: shiftId, p_require_approval: requireApproval });
+  if (error) throw error;
+}
+
 export async function withdrawSwap(postId) {
   const { error } = await supabase.rpc('swap_post_withdraw', { p_post: postId });
   if (error) throw error;

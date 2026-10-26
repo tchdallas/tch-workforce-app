@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/api/supabase';
+import { base44 } from '@/api/base44Client';
 import { useCurrentMember } from '@/hooks/useCurrentMember';
 import { useTeamMembers } from '@/lib/useAppData';
 import { useMessagingDirectory } from '@/lib/messaging';
 import {
   INTENTS, STATUSES, useMyBoards, useSwapPosts, useSwapReplies, useSwapReplyCounts, useSwapBoardMutes,
   useShiftsById, useUpcomingShifts, useAppSettings, swapApprovalRequired,
-  createSwapPost, cancelSwapPost, addSwapReply, deleteSwapReply, initiateSwap, withdrawSwap, respondToDeal, setBoardMuted,
+  createSwapPost, cancelSwapPost, addSwapReply, deleteSwapReply, initiateSwap, claimSwap, withdrawSwap, respondToDeal, setBoardMuted,
 } from '@/lib/swapBoard';
 import PageHeader from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -236,6 +237,7 @@ function PostThread({ post, board, myId, member, isManager, shift, dealShift, na
   const [busy, setBusy] = useState(false);
   const [pickFor, setPickFor] = useState(null); // trade: counterpart id whose shift to pick
   const [offerOpen, setOfferOpen] = useState(false); // pickup: offer my shift
+  const [proposeOpen, setProposeOpen] = useState(false); // trade: viewer proposes own shift
   const scrollRef = useRef(null);
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [replies.length]);
 
@@ -244,8 +246,26 @@ function PostThread({ post, board, myId, member, isManager, shift, dealShift, na
   const intent = INTENTS[post.intent]; const status = STATUSES[post.status];
   const Icon = intentIcon[post.intent];
   const repliers = useMemo(() => [...new Set(replies.filter(r => r.kind === 'reply' && !r.deleted_at && r.author_id && r.author_id !== post.author_id).map(r => r.author_id))], [replies, post.author_id]);
-  // who must act on the pending deal: giveaway/trade -> counterpart; pickup -> poster
-  const awaitingMe = post.status === 'pending' && ((post.intent !== 'pickup' && post.counterpart_id === myId) || (post.intent === 'pickup' && mine));
+  // the linked request says whose turn it is (deals can start from either
+  // side now: poster offers, OR a viewer claims/proposes)
+  const dealReqId = post.giveaway_request_id || post.trade_request_id;
+  const { data: dealReq = null } = useQuery({
+    queryKey: ['swap-deal-req', dealReqId, post.status],
+    queryFn: async () => {
+      const rows = post.giveaway_request_id
+        ? await base44.entities.ShiftGiveawayRequest.filter({ id: dealReqId })
+        : await base44.entities.ShiftTradeRequest.filter({ id: dealReqId });
+      return rows[0] || null;
+    },
+    enabled: !!dealReqId && post.status === 'pending',
+  });
+  const awaitingMe = post.status === 'pending' && (
+    post.intent === 'pickup' ? mine
+      : post.intent === 'trade'
+        ? (dealReq ? (dealReq.status === 'pending_team_member' && dealReq.targetTeamMemberId === myId) : post.counterpart_id === myId)
+        : (dealReq ? (dealReq.status === 'open' && post.counterpart_id === myId) : post.counterpart_id === myId)
+  );
+  const awaitingManager = post.status === 'pending' && dealReq?.status === 'pending_manager';
   const dealShiftId = post.intent === 'pickup' ? post.deal_shift_id : post.shift_id; // the shift I'd receive
   const dealLoc = (post.intent === 'pickup' ? dealShift : shift)?.locationId || post.location_id;
   const requireApproval = swapApprovalRequired(settings, dealLoc);
@@ -299,7 +319,9 @@ function PostThread({ post, board, myId, member, isManager, shift, dealShift, na
             {awaitingMe ? (
               <>
                 <span className="text-xs text-muted-foreground mr-1">
-                  {post.intent === 'trade' ? `Trade your ${fmtShift(dealShift)} for their ${fmtShift(shift)}?` : `Take the ${fmtShift(post.intent === 'pickup' ? dealShift : shift)} shift?`}
+                  {post.intent === 'trade'
+                    ? (mine ? `Trade your ${fmtShift(shift)} for their ${fmtShift(dealShift)}?` : `Trade your ${fmtShift(dealShift)} for their ${fmtShift(shift)}?`)
+                    : `Take the ${fmtShift(post.intent === 'pickup' ? dealShift : shift)} shift?`}
                 </span>
                 <Button size="sm" className="h-7 text-xs gap-1" disabled={busy}
                   onClick={() => run(() => respondToDeal(post, { accept: true, memberId: myId, requireApproval }),
@@ -313,7 +335,9 @@ function PostThread({ post, board, myId, member, isManager, shift, dealShift, na
               </>
             ) : (
               <span className="text-xs text-muted-foreground inline-flex items-center gap-1"><Clock className="w-3 h-3" />
-                {post.giveaway_request_id || post.trade_request_id ? 'Waiting on ' + (post.intent === 'pickup' ? nameOf(post.author_id) : nameOf(post.counterpart_id)) + (requireApproval ? ', then a manager' : '') : 'In progress'}
+                {awaitingManager ? 'Waiting on manager approval'
+                  : dealReqId ? 'Waiting on ' + (dealReq && post.intent === 'trade' ? nameOf(dealReq.targetTeamMemberId) : post.intent === 'pickup' ? nameOf(post.author_id) : nameOf(post.counterpart_id)) + (requireApproval ? ', then a manager' : '')
+                  : 'In progress'}
               </span>
             )}
             {(mine || post.counterpart_id === myId || canModerate) && (
@@ -325,8 +349,24 @@ function PostThread({ post, board, myId, member, isManager, shift, dealShift, na
         {post.status === 'open' && post.intent === 'pickup' && !mine && board?.mine && (
           <div className="mt-2"><Button size="sm" className="h-7 text-xs gap-1" onClick={() => setOfferOpen(true)}><Gift className="w-3 h-3" /> Offer one of my shifts</Button></div>
         )}
+        {post.status === 'open' && post.intent === 'giveaway' && !mine && board?.mine && (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Button size="sm" className="h-8 text-xs gap-1" disabled={busy}
+              onClick={() => run(() => claimSwap(post.id, { requireApproval }),
+                requireApproval ? 'Shift claimed — pending manager approval' : 'Shift claimed — the schedule is updated')}>
+              <Check className="w-3.5 h-3.5" /> Pick up this shift
+            </Button>
+            <span className="text-[11px] text-muted-foreground">One tap — no reply needed.</span>
+          </div>
+        )}
+        {post.status === 'open' && post.intent === 'trade' && !mine && board?.mine && (
+          <div className="mt-2"><Button size="sm" className="h-8 text-xs gap-1" disabled={busy} onClick={() => setProposeOpen(true)}>
+            <Gift className="w-3.5 h-3.5" /> Propose a trade</Button></div>
+        )}
         {post.status === 'open' && post.intent !== 'pickup' && mine && repliers.length === 0 && (
-          <p className="mt-2 text-[11px] text-muted-foreground">When someone replies, you’ll get a button here to {post.intent === 'giveaway' ? 'give them the shift' : 'trade with them'}.</p>
+          <p className="mt-2 text-[11px] text-muted-foreground">{post.intent === 'giveaway'
+            ? 'Anyone qualified can take this with one tap — or when someone replies, you can offer it to them specifically.'
+            : 'Anyone can propose a trade directly — or when someone replies, you can pick who to trade with.'}</p>
         )}
       </div>
 
@@ -381,6 +421,11 @@ function PostThread({ post, board, myId, member, isManager, shift, dealShift, na
         title={`Trade with ${pickFor ? nameOf(pickFor) : ''}`} description={`Pick which of their shifts you want in return for your ${fmtShift(shift)}. They’ll need to accept.`}
         meRoleIds={member?.assignedRoleIds} meLocIds={[...(member?.assignedLocationIds || []), member?.homeLocationId]}
         onPick={(sid) => run(async () => { await initiateSwap(post.id, { counterpartId: pickFor, shiftId: sid }); setPickFor(null); }, 'Trade proposed — waiting for them to accept')} />
+      {/* trade (viewer side): propose one of MY shifts for theirs */}
+      <ShiftPickerDialog open={proposeOpen} onClose={() => setProposeOpen(false)} memberId={proposeOpen ? myId : null}
+        title={`Propose a trade with ${nameOf(post.author_id)}`}
+        description={`Pick one of your upcoming shifts to offer for their ${fmtShift(shift)}. They’ll need to accept${requireApproval ? ', then a manager approves' : ''}.`}
+        onPick={(sid) => run(async () => { await claimSwap(post.id, { shiftId: sid, requireApproval }); setProposeOpen(false); }, 'Trade proposed — waiting for them to accept')} />
       {/* pickup: offer my shift */}
       <ShiftPickerDialog open={offerOpen} onClose={() => setOfferOpen(false)} memberId={offerOpen ? myId : null}
         roleId={post.role_id} locationId={post.location_id}
