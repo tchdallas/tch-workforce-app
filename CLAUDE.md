@@ -36,7 +36,7 @@ DB triggers call `private.notify()` (honors `notification_preferences`). In-app 
 ## Brand (Brand Book 2024)
 Signature Gold `#d2ad74`, black, Cool Gray `#f2f4f8`, Deep Gold `#86764e`, Navy `#0c2340`. Bebas Neue headlines (`font-display`), Figtree body. Chip mark at `public/tch-mark-gold.png`.
 
-## Attendance points & progressive discipline (built July 2026, in prod DB, NOT yet deployed to Vercel)
+## Attendance points & progressive discipline (built July 2026, live in production)
 Digitizes the 2026 Attendance Policy + the paper Performance Documentation form. Key decisions:
 - **Attendance** (`/attendance`, manager+): per-location roster with search, one **company-wide** point balance per member (location filter only scopes the list). Points issued via `issue_attendance_infraction` RPC (snapshots catalog value, doubles on high-volume days). Managers issue; **location_admin+ excuses/decides appeals** (separation of duties). Rolling 12-month window; 5-pt cap first 90 days, then 10; ladder 4/6/8/10. Every policy number lives in `attendance_policy_settings` + `attendance_infraction_types` — **super_admin-editable** in Settings → Attendance Policy; functions read live.
 - **Discipline** (TeamMemberModal "File" tab): journal notes-to-file (per-note share-with-member choice) + Performance Documentation ladder Info→DC→WW→FWW→SPI→Separation (SPI/Separation = location_admin+, enforced in RLS and RPC). Typed-name digital signatures; member signs/refuses from My Profile → Documents; drafts invisible to member; transitions only via RPCs (issue/sign/refuse/witness/void).
