@@ -285,7 +285,9 @@ export default function Requests() {
                     <p className="text-xs text-muted-foreground">
                       {req.recurrence === 'weekly'
                         ? <>Every {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][req.weekday]}{req.endDateTime ? ` · until ${format(new Date(req.endDateTime), 'MMM d, yyyy')}` : ' · ongoing'}</>
-                        : <>{req.startDateTime && format(new Date(req.startDateTime), 'MMM d')} – {req.endDateTime && format(new Date(req.endDateTime), 'MMM d, yyyy')}{req.isFullDay ? ' (Full day)' : ''}</>}
+                        : req.startDateTime && req.endDateTime && format(new Date(req.startDateTime), 'yyyy-MM-dd') === format(new Date(req.endDateTime), 'yyyy-MM-dd')
+                          ? <>{format(new Date(req.startDateTime), 'MMM d, yyyy')}{req.isFullDay ? ' (Full day)' : ''}</>
+                          : <>{req.startDateTime && format(new Date(req.startDateTime), 'MMM d')} – {req.endDateTime && format(new Date(req.endDateTime), 'MMM d, yyyy')}{req.isFullDay ? ' (Full day)' : ''}</>}
                     </p>
                     {req.reason && <p className="text-xs text-muted-foreground mt-0.5">{req.reason}</p>}
                   </div>

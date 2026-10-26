@@ -7,7 +7,7 @@ import { useRoles, useLocations } from '@/lib/useAppData';
 import {
   useMyConversations, useMessages, useMyBlocks, useMessagingDirectory, useConversationParticipants, useMessagingMutes,
   sendMessage, markRead, setMuted, setPinned, hideConversation, archiveConversation, setMessagingMute, startDM,
-  createGroup, updateGroup, addParticipants, removeParticipant, blockMember, softDeleteMessage, flagMessage,
+  createGroup, updateGroup, addParticipants, removeParticipant, blockMember, unblockMember, useBlockedWith, softDeleteMessage, flagMessage,
 } from '@/lib/messaging';
 import PageHeader from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -75,8 +75,15 @@ export default function Messages() {
   const { data: directory = [] } = useMessagingDirectory(myId);
   const { data: roles = [] } = useRoles();
   const { data: locations = [] } = useLocations();
-  const { data: conversations = [] } = useMyConversations(myId);
+  const { data: allConversations = [] } = useMyConversations(myId);
   const { data: myBlocks = [] } = useMyBlocks(myId);
+  const { data: blockedWith = [] } = useBlockedWith(myId);
+  // a block (mine or theirs) removes the DM from the list entirely
+  const blockedIds = useMemo(() => new Set(blockedWith.map(b => b.member_id)), [blockedWith]);
+  const conversations = useMemo(
+    () => allConversations.filter(c =>
+      c.conversation_type !== 'direct' || !c.otherMemberIds.some(id => blockedIds.has(id))),
+    [allConversations, blockedIds]);
   const { data: mutes = [] } = useMessagingMutes(myId);
   const amMuted = mutes.some(m => m.team_member_id === myId);
   const mutedIds = useMemo(() => new Set(mutes.map(m => m.team_member_id)), [mutes]);
@@ -289,13 +296,27 @@ export default function Messages() {
   };
   const canDeleteGroup = selected?.conversation_type === 'group' && (selected.created_by === myId || canMod);
 
+  const refreshBlocks = () => {
+    qc.invalidateQueries({ queryKey: ['my-blocks', myId] });
+    qc.invalidateQueries({ queryKey: ['blocked-with', myId] });
+    qc.invalidateQueries({ queryKey: ['messaging-directory', myId] });
+    qc.invalidateQueries({ queryKey: ['conversations', myId] });
+  };
   const handleBlock = async () => {
     const otherId = selected.otherMemberIds[0];
     try {
       await blockMember(myId, otherId);
-      qc.invalidateQueries({ queryKey: ['my-blocks', myId] });
-      toast.success('Blocked');
+      setSelectedId(null); // the conversation disappears for both sides
+      refreshBlocks();
+      toast.success('Blocked — the conversation is hidden for both of you. Unblock anytime under New DM.');
     } catch (e) { toast.error(e.message?.includes('policy') ? "You can't block this person" : (e.message || 'Could not block')); }
+  };
+  const handleUnblock = async (otherId) => {
+    try {
+      await unblockMember(myId, otherId);
+      refreshBlocks();
+      toast.success('Unblocked');
+    } catch (e) { toast.error(e.message || 'Could not unblock'); }
   };
 
   // admin mute everywhere — the DB enforces who may mute whom
@@ -550,6 +571,20 @@ export default function Messages() {
             <TeamMemberCombobox value="" onChange={handleStartDm} eligibleTeamMembers={dmCandidates} placeholder="Search team member…" />
             <p className="text-[11px] text-muted-foreground mt-1">You can message people who share a location with you.</p>
           </div>
+          {blockedWith.some(b => b.i_blocked) && (
+            <div>
+              <Label className="text-xs">Blocked</Label>
+              <div className="border border-border rounded-md divide-y divide-border/50 mt-1">
+                {blockedWith.filter(b => b.i_blocked).map(b => (
+                  <div key={b.member_id} className="flex items-center justify-between px-2.5 py-1.5 text-sm">
+                    <span>{b.display_name || 'Team member'}</span>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => handleUnblock(b.member_id)}>Unblock</Button>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-1">Unblocking brings the conversation back for both of you.</p>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

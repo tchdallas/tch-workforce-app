@@ -51,13 +51,17 @@ export default function TimeOffForm({ memberId }) {
   const handleSubmit = () => {
     const isWeekly = form.recurrence === 'weekly';
     if (!form.startDateTime) return toast.error(isWeekly ? 'Pick a start date' : 'Please select dates');
-    if (!isWeekly && !form.endDateTime) return toast.error('Please select an end date');
+    if (!isWeekly && !form.endDateTime) return toast.error('Please select an end date (same day as the start is fine)');
+    if (form.endDateTime && form.endDateTime < form.startDateTime) return toast.error("The end date can't be before the start date");
     submitMutation.mutate({
       teamMemberId: memberId,
       recurrence: form.recurrence,
       weekday: isWeekly ? Number(form.weekday) : null,
-      startDateTime: new Date(form.startDateTime).toISOString(),
-      endDateTime: form.endDateTime ? new Date(form.endDateTime).toISOString() : null,
+      // full days in LOCAL time: midnight through 23:59:59 of the end day.
+      // (Bare 'YYYY-MM-DD' parses as UTC midnight, which displayed a day
+      // early in Texas and left the last day uncovered by conflict checks.)
+      startDateTime: new Date(form.startDateTime + 'T00:00:00').toISOString(),
+      endDateTime: form.endDateTime ? new Date(form.endDateTime + 'T23:59:59').toISOString() : null,
       isFullDay: true,
       reason: form.reason,
       note: form.note,
@@ -175,7 +179,9 @@ export default function TimeOffForm({ memberId }) {
                       Every {DAYS[req.weekday]}
                       {req.endDateTime ? ` · until ${format(new Date(req.endDateTime), 'MMM d, yyyy')}` : ' · ongoing'}</>
                   ) : (
-                    <>{format(new Date(req.startDateTime), 'MMM d')} – {req.endDateTime ? format(new Date(req.endDateTime), 'MMM d, yyyy') : '—'}</>
+                    req.endDateTime && format(new Date(req.startDateTime), 'yyyy-MM-dd') === format(new Date(req.endDateTime), 'yyyy-MM-dd')
+                      ? <>{format(new Date(req.startDateTime), 'MMM d, yyyy')}</>
+                      : <>{format(new Date(req.startDateTime), 'MMM d')} – {req.endDateTime ? format(new Date(req.endDateTime), 'MMM d, yyyy') : '—'}</>
                   )}
                 </p>
                 {req.reason && <p className="text-xs text-muted-foreground truncate">{req.reason}</p>}

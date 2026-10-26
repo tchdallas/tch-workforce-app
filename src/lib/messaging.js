@@ -314,12 +314,31 @@ export async function removeParticipant(conversationId, memberId) {
 }
 
 export async function blockMember(myId, otherId) {
+  // upsert: clicking Block twice (or a stale UI) must not explode on the
+  // primary key — an existing block just stays in place
   const { error } = await supabase.from('member_blocks')
-    .insert({ blocker_team_member_id: myId, blocked_team_member_id: otherId });
+    .upsert({ blocker_team_member_id: myId, blocked_team_member_id: otherId },
+      { onConflict: 'blocker_team_member_id,blocked_team_member_id', ignoreDuplicates: true });
   if (error) throw error;
 }
 
 export async function unblockMember(myId, otherId) {
   await supabase.from('member_blocks').delete()
     .eq('blocker_team_member_id', myId).eq('blocked_team_member_id', otherId);
+}
+
+// Everyone I have a block with, in EITHER direction (definer RPC — the person
+// who was blocked can't read member_blocks under RLS). Rows carry the display
+// name because the directory hides blocked people. Used to hide the DM from
+// both sides and to power the blocker's Unblock list.
+export function useBlockedWith(memberId) {
+  return useQuery({
+    queryKey: ['blocked-with', memberId],
+    enabled: !!memberId,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('blocked_with');
+      if (error) throw error;
+      return data || [];
+    },
+  });
 }
