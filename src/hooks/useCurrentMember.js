@@ -21,16 +21,24 @@ export function useCurrentMember() {
   // ['teamMembers'] key with the roster query but fetched UNFILTERED, so
   // whichever ran last overwrote the other (archived members leaked into
   // every list). RLS always allows reading your own row.
-  const { data: rows = [] } = useQuery({
-    queryKey: ['current-member', user?.email],
-    queryFn: () => base44.entities.TeamMember.filter({ email: user.email }),
-    enabled: !!user?.email,
+  // Look up by the auth-account LINK (user_id), not by email: auth emails are
+  // stored lowercase, so an email saved as "Name@..." in the profile made this
+  // lookup miss entirely — and the old "no member yet = manager" default then
+  // dressed a team member in the full admin UI (RLS still blocked everything,
+  // but the menus were wrong). user_id is set by DB trigger and can't drift.
+  const { data: rows = [], isFetched } = useQuery({
+    queryKey: ['current-member', user?.id],
+    queryFn: () => base44.entities.TeamMember.filter({ userId: user.id }),
+    enabled: !!user?.id,
     placeholderData: [],
   });
 
-  const member = rows.find(m => m.email === user?.email) || null;
+  const member = rows[0] || null;
 
-  const isManager = !member || MANAGER_LEVELS.has(member?.permissionLevel);
+  // Optimistic ONLY while the lookup is in flight (so real managers get no
+  // flash of a stripped menu); once it settles with no row, show the least
+  // privileged view — never default anyone INTO manager chrome.
+  const isManager = member ? MANAGER_LEVELS.has(member.permissionLevel) : !isFetched;
   // strict (false while loading): used to hide admin-only UI, so no flash of access
   const isAdmin = !!member && ADMIN_LEVELS.has(member?.permissionLevel);
   const isTeamMember = !!member && !MANAGER_LEVELS.has(member?.permissionLevel);
@@ -40,7 +48,7 @@ export function useCurrentMember() {
   // Can this user act across every location? True for company-wide roles, and
   // optimistically true while the member row is still loading (so admins don't
   // see a flash of empty pickers); location-scoped roles narrow once loaded.
-  const canSeeAllLocations = !member || ALL_LOCATION_LEVELS.has(member?.permissionLevel);
+  const canSeeAllLocations = member ? ALL_LOCATION_LEVELS.has(member.permissionLevel) : !isFetched;
 
   // Filter a list of locations down to the ones this user may manage. Company
   // -wide roles get everything; everyone else only their assigned locations.
