@@ -72,7 +72,7 @@ export default function TeamMembers() {
     setInvitingId(tm.id);
     try {
       await base44.users.inviteUser(tm.email, 'user');
-      toast.success(`Invite sent to ${tm.email}`);
+      toast.success(tm.lastLoginAt ? `Login link sent to ${tm.email}` : `Invite sent to ${tm.email}`);
       queryClient.invalidateQueries({ queryKey: ['teamMembers'] });
     } catch (e) {
       toast.error(e.message || 'Could not send invite');
@@ -530,26 +530,25 @@ export default function TeamMembers() {
               )}
               {tm.status !== 'archived' && tm.email && (
                 <div className="mt-3 pt-2 border-t border-border/50 flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                  {tm.lastLoginAt ? (
+                  {tm.lastLoginAt && (
                     <span className="text-[10px] text-emerald-600 flex items-center gap-1">
                       <CheckCircle2 className="w-3 h-3" /> Joined
                     </span>
-                  ) : (
-                    <>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 gap-1.5 text-xs"
-                        onClick={() => handleSendInvite(tm)}
-                        disabled={invitingId === tm.id}
-                      >
-                        {invitingId === tm.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Mail className="w-3 h-3" />}
-                        {tm.invitedAt ? 'Resend invite' : 'Send invite'}
-                      </Button>
-                      {tm.invitedAt && (
-                        <span className="text-[10px] text-muted-foreground">Invited {format(new Date(tm.invitedAt), 'MMM d')}</span>
-                      )}
-                    </>
+                  )}
+                  {/* always available: re-invite someone who lost the email, or
+                      send a one-tap login link to someone who's locked out */}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 gap-1.5 text-xs"
+                    onClick={() => handleSendInvite(tm)}
+                    disabled={invitingId === tm.id}
+                  >
+                    {invitingId === tm.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Mail className="w-3 h-3" />}
+                    {tm.lastLoginAt ? 'Send login link' : tm.invitedAt ? 'Resend invite' : 'Send invite'}
+                  </Button>
+                  {!tm.lastLoginAt && tm.invitedAt && (
+                    <span className="text-[10px] text-muted-foreground">Invited {format(new Date(tm.invitedAt), 'MMM d')}</span>
                   )}
                 </div>
               )}
@@ -580,6 +579,7 @@ export default function TeamMembers() {
                 <th className="px-3 py-2 font-semibold cursor-pointer select-none hidden sm:table-cell" onClick={() => setSortBy('location')}>Location</th>
                 <th className="px-3 py-2 font-semibold hidden md:table-cell">Roles</th>
                 <th className="px-3 py-2 font-semibold hidden lg:table-cell">Email</th>
+                <th className="px-2 py-2" aria-label="Invite"></th>
               </tr>
             </thead>
             <tbody>
@@ -609,6 +609,16 @@ export default function TeamMembers() {
                     </div>
                   </td>
                   <td className="px-3 py-2 text-muted-foreground hidden lg:table-cell truncate max-w-[220px]">{tm.email}</td>
+                  <td className="px-2 py-2" onClick={e => e.stopPropagation()}>
+                    {tm.status !== 'archived' && tm.email && (
+                      <Button size="icon" variant="ghost" className="h-7 w-7"
+                        title={tm.lastLoginAt ? 'Send login link' : tm.invitedAt ? 'Resend invite' : 'Send invite'}
+                        aria-label={tm.lastLoginAt ? 'Send login link' : 'Send invite'}
+                        onClick={() => handleSendInvite(tm)} disabled={invitingId === tm.id}>
+                        {invitingId === tm.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
+                      </Button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
