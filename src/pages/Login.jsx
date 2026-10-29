@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/lib/AuthContext';
+import { supabase } from '@/api/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -79,8 +80,23 @@ export default function Login() {
     }
     setBusy(true);
     try {
-      await resetPassword(email.trim());
-      setInfo('Password reset email sent - check your inbox.');
+      const addr = email.trim();
+      // only current team members get a reset email; unknown or archived
+      // emails see a neutral message and nothing is sent
+      let allowed = 'ok';
+      try {
+        const { data, error: rpcErr } = await supabase.rpc('password_reset_allowed', { p_email: addr });
+        if (!rpcErr && data) allowed = data;
+      } catch { /* if the check itself fails, fall back to sending */ }
+
+      if (allowed === 'no_login') {
+        setError('No account exists for this email yet — use "First time here? Set up your password" below.');
+      } else if (allowed === 'no') {
+        setInfo('If this email belongs to a current team member, a reset link is on its way.');
+      } else {
+        await resetPassword(addr);
+        setInfo(`Reset link sent to ${addr} — open it, choose a new password, and you'll be signed right in.`);
+      }
     } catch (err) {
       setError(err?.message || 'Could not send the reset email.');
     } finally {

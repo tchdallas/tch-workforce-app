@@ -6,6 +6,7 @@ import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
+import PasswordSetupDialog from '@/components/PasswordSetupDialog';
 // Add page imports here
 import AppLayout from '@/components/layout/AppLayout';
 import Dashboard from '@/pages/Dashboard';
@@ -49,13 +50,15 @@ const AuthenticatedApp = () => {
   }
 
   if (authError?.type === 'user_not_registered') {
-    return <UserNotRegisteredError />;
+    return <><PasswordSetupDialog /><UserNotRegisteredError /></>;
   }
   if (!isAuthenticated) {
     return <Login />;
   }
 
   return (
+    <>
+    <PasswordSetupDialog />
     <Routes>
       <Route element={<AppLayout />}>
         <Route path="/" element={<Dashboard />} />
@@ -89,6 +92,7 @@ const AuthenticatedApp = () => {
       <Route path="/kiosk" element={<Kiosk />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
+    </>
   );
 };
 

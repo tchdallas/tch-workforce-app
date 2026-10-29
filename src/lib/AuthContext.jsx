@@ -11,12 +11,23 @@ const APP_PUBLIC_SETTINGS = { id: 'tch-workforce', public_settings: { name: 'TCH
 
 const ADMIN_LEVELS = new Set(['super_admin', 'corporate_admin']);
 
+// What kind of email link brought us here, read before supabase-js consumes
+// and strips the URL hash. Invites arrive as magic links ('magiclink' /
+// 'invite' / 'signup'); password resets as 'recovery'.
+const AUTH_LINK_TYPE = (window.location.hash.match(/type=([a-z]+)/) || [])[1] || null;
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [authError, setAuthError] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
+  // 'invite' | 'recovery' | null — drives the set-your-password dialog that
+  // greets people arriving from an invite or reset email
+  const [passwordSetup, setPasswordSetup] = useState(() =>
+    ['magiclink', 'invite', 'signup'].includes(AUTH_LINK_TYPE) ? 'invite'
+      : AUTH_LINK_TYPE === 'recovery' ? 'recovery' : null
+  );
 
   const applySession = useCallback(async (session) => {
     if (!session?.user) {
@@ -89,6 +100,11 @@ export const AuthProvider = ({ children }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!active) return;
       if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'USER_UPDATED') {
+        applySession(session);
+      }
+      // reset links fire this once the recovery session is in place
+      if (event === 'PASSWORD_RECOVERY') {
+        setPasswordSetup('recovery');
         applySession(session);
       }
       // Access tokens expire hourly. The realtime socket keeps the OLD token
@@ -168,6 +184,8 @@ export const AuthProvider = ({ children }) => {
         authError,
         appPublicSettings: APP_PUBLIC_SETTINGS,
         authChecked,
+        passwordSetup,
+        finishPasswordSetup: () => setPasswordSetup(null),
         signIn,
         signUp,
         resetPassword,
