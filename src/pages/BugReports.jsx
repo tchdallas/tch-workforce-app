@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Bug, ChevronDown, Copy, ExternalLink, Image as ImageIcon, Lightbulb } from 'lucide-react';
+import { Bug, ChevronDown, Copy, ExternalLink, Image as ImageIcon, Lightbulb, FileText, Paperclip } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -154,6 +154,17 @@ ${errs}`;
               </div>
             )}
 
+            {(bug.attachments || []).length > 0 && (
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">
+                  <Paperclip className="w-3 h-3 inline -mt-0.5 mr-1" />Files from the reporter
+                </p>
+                <div className="space-y-1.5">
+                  {bug.attachments.map((a, i) => <BugAttachment key={a.path || i} att={a} />)}
+                </div>
+              </div>
+            )}
+
             {isManager && (bug.consoleLog || []).length > 0 && (
               <div>
                 <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">Recent console errors ({bug.consoleLog.length})</p>
@@ -245,6 +256,43 @@ function Discussion({ reportId, meId }) {
         <Button size="sm" disabled={!draft.trim() || send.isPending} onClick={() => send.mutate()}>Reply</Button>
       </div>
     </div>
+  );
+}
+
+const prettyFileSize = (b) => b < 1024 ? `${b} B` : b < 1048576 ? `${Math.round(b / 1024)} KB` : `${(b / 1048576).toFixed(1)} MB`;
+
+function BugAttachment({ att }) {
+  const isImage = (att.type || '').startsWith('image/');
+  // images sign up front for an inline preview; other files sign on click
+  const { data: url } = useQuery({
+    queryKey: ['bug-att-url', att.path],
+    queryFn: async () => {
+      const { data, error } = await supabase.storage.from('bug-screenshots').createSignedUrl(att.path, 3600);
+      if (error) throw error;
+      return data.signedUrl;
+    },
+    enabled: isImage,
+    staleTime: 45 * 60 * 1000,
+  });
+  if (isImage) {
+    return url ? (
+      <a href={url} target="_blank" rel="noreferrer" className="block">
+        <img src={url} alt={att.name} loading="lazy" className="rounded-lg border border-border max-h-56 object-contain bg-muted/30" />
+      </a>
+    ) : <div className="h-20 w-36 rounded-lg bg-muted animate-pulse" />;
+  }
+  const open = async () => {
+    const { data, error } = await supabase.storage.from('bug-screenshots').createSignedUrl(att.path, 3600);
+    if (error || !data?.signedUrl) return toast.error('Could not open that file');
+    window.open(data.signedUrl, '_blank', 'noopener');
+  };
+  return (
+    <button type="button" onClick={open}
+      className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-1.5 text-xs w-full text-left hover:bg-muted/50">
+      <FileText className="w-4 h-4 shrink-0 text-muted-foreground" />
+      <span className="truncate flex-1">{att.name}</span>
+      {att.size ? <span className="text-muted-foreground shrink-0">{prettyFileSize(att.size)}</span> : null}
+    </button>
   );
 }
 

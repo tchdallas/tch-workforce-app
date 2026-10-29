@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Bug, Loader2, ChevronDown, Check, ImageOff, Lightbulb, MessageSquarePlus } from 'lucide-react';
+import { Bug, Loader2, ChevronDown, Check, ImageOff, Lightbulb, MessageSquarePlus, Paperclip, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -88,6 +88,21 @@ export default function BugReporter() {
   const [showTech, setShowTech] = useState(false);
   const [form, setForm] = useState(empty);
   const [inputFocused, setInputFocused] = useState(false);
+  const [files, setFiles] = useState([]); // extra files the person adds
+  const fileInputRef = useRef(null);
+
+  const addFiles = (list) => {
+    const incoming = Array.from(list || []);
+    setFiles((prev) => {
+      const next = [...prev];
+      for (const f of incoming) {
+        if (f.size > 10 * 1024 * 1024) { toast.error(`${f.name} is over 10MB`); continue; }
+        if (next.length >= 5) { toast.error('Up to 5 files per report'); break; }
+        next.push(f);
+      }
+      return next;
+    });
+  };
 
   // Hide the floating button while someone is typing in a field, so it never
   // covers a page's own controls (e.g. the Messages send button on mobile).
@@ -108,6 +123,7 @@ export default function BugReporter() {
     setShowTech(false);
     setIncludeShot(true);
     setShot(null);
+    setFiles([]);
     setCapturing(true);
     setOpen(true);
     const blob = await captureViewport();
@@ -131,6 +147,16 @@ export default function BugReporter() {
           .upload(path, shot.blob, { contentType: 'image/jpeg' });
         if (!error) screenshotPath = path;
       }
+      const attachments = [];
+      for (const f of files) {
+        const safe = f.name.replace(/[^\w.\- ]+/g, '_').slice(-80);
+        const path = `${crypto.randomUUID()}-${safe}`;
+        const { error } = await supabase.storage
+          .from('bug-screenshots')
+          .upload(path, f, { contentType: f.type || 'application/octet-stream' });
+        if (error) throw new Error(`Could not upload ${f.name}: ${error.message}`);
+        attachments.push({ path, name: f.name, type: f.type || '', size: f.size });
+      }
       await base44.entities.BugReport.create({
         reporterId: member?.id || null,
         kind: form.kind,
@@ -144,6 +170,7 @@ export default function BugReporter() {
         appVersion: bundleVersion(),
         consoleLog: getRecentErrors(),
         screenshotPath,
+        attachments,
       });
     },
     onSuccess: () => {
@@ -296,6 +323,35 @@ export default function BugReporter() {
                   </div>
                 )}
               </div>
+            </div>
+
+            {/* Extra files (optional) */}
+            <div className="rounded-lg border border-border p-2.5 space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">More files (optional)</Label>
+                <Button type="button" size="sm" variant="outline" className="h-7 text-xs gap-1"
+                  onClick={() => fileInputRef.current?.click()}>
+                  <Paperclip className="w-3 h-3" /> Add files
+                </Button>
+                <input ref={fileInputRef} type="file" multiple className="hidden"
+                  accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
+                  onChange={(e) => { addFiles(e.target.files); e.target.value = ''; }} />
+              </div>
+              {files.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {files.map((f, i) => (
+                    <span key={i} className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[11px] max-w-[200px]">
+                      <Paperclip className="w-3 h-3 shrink-0" />
+                      <span className="truncate">{f.name}</span>
+                      <button type="button" className="hover:text-destructive" onClick={() => setFiles(p => p.filter((_, j) => j !== i))}>
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">Photos, videos, or documents that help explain it — up to 5 files, 10MB each.</p>
+              )}
             </div>
 
             {/* Technical details (auto-attached) */}
