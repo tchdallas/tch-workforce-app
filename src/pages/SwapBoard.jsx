@@ -55,13 +55,50 @@ export default function SwapBoard() {
   }, [boards, boardKey]);
   const board = boards.find(b => b.key === boardKey) || null;
   const [showClosed, setShowClosed] = useState(false);
-  const [intentFilter, setIntentFilter] = useState(null);
+  // filters stack: any mix of post types, plus shift details (date range and
+  // start-time window). Empty intent set = all types.
+  const [intentFilters, setIntentFilters] = useState(() => new Set());
+  const [detail, setDetail] = useState({ dateFrom: '', dateTo: '', timeFrom: '', timeTo: '' });
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const detailCount = Object.values(detail).filter(Boolean).length;
+  const toggleIntent = (i) => setIntentFilters(prev => {
+    const next = new Set(prev);
+    if (next.has(i)) next.delete(i); else next.add(i);
+    return next;
+  });
 
   const { data: postsRaw = [] } = useSwapPosts({ locationId: board?.locationId, roleId: board?.roleId, includeClosed: showClosed });
-  const posts = useMemo(() => postsRaw.filter(p => !intentFilter || p.intent === intentFilter), [postsRaw, intentFilter]);
-  const { data: counts = {} } = useSwapReplyCounts(posts.map(p => p.id));
-  const { data: shifts = [] } = useShiftsById(posts.flatMap(p => [p.shift_id, p.deal_shift_id]));
+  // fetch shifts for ALL posts (not just the filtered ones) — the detail
+  // filters below need each post's shift to decide whether it matches
+  const { data: shifts = [] } = useShiftsById(postsRaw.flatMap(p => [p.shift_id, p.deal_shift_id]));
   const shiftById = (id) => shifts.find(s => s.id === id);
+
+  const posts = useMemo(() => postsRaw.filter(p => {
+    if (intentFilters.size > 0 && !intentFilters.has(p.intent)) return false;
+    if (detailCount === 0) return true;
+    // date/time filters go by the post's shift; posts without one (pick-up
+    // requests) can't match a specific date, so they drop out of the results
+    const s = p.shift_id ? shifts.find(x => x.id === p.shift_id) : null;
+    if (!s) return false;
+    const start = new Date(s.startDateTime);
+    const day = format(start, 'yyyy-MM-dd');
+    if (detail.dateFrom && day < detail.dateFrom) return false;
+    if (detail.dateTo && day > detail.dateTo) return false;
+    const hm = format(start, 'HH:mm');
+    if (detail.timeFrom && detail.timeTo) {
+      if (detail.timeFrom <= detail.timeTo) {
+        if (hm < detail.timeFrom || hm > detail.timeTo) return false;
+      } else if (hm < detail.timeFrom && hm > detail.timeTo) {
+        return false; // window wraps past midnight (e.g. 6 PM – 2 AM)
+      }
+    } else if (detail.timeFrom && hm < detail.timeFrom) {
+      return false;
+    } else if (detail.timeTo && hm > detail.timeTo) {
+      return false;
+    }
+    return true;
+  }), [postsRaw, intentFilters, detail, detailCount, shifts]);
+  const { data: counts = {} } = useSwapReplyCounts(posts.map(p => p.id));
 
   // deep link to a post: ?p=<id> (notifications)
   const [selectedId, setSelectedId] = useState(null);
@@ -161,18 +198,63 @@ export default function SwapBoard() {
       <div className="flex-1 min-h-0 border border-border rounded-lg overflow-hidden flex">
         {/* Tiles */}
         <div className={cn('w-full sm:w-80 md:w-96 border-r border-border flex flex-col', selectedId && 'hidden sm:flex')}>
-          <div className="p-2 border-b border-border flex items-center gap-1 flex-wrap">
-            <Filter className="w-3.5 h-3.5 text-muted-foreground ml-1" />
-            {[null, 'pickup', 'giveaway', 'trade'].map(i => (
-              <button key={i || 'all'} type="button" onClick={() => setIntentFilter(i)}
-                className={cn('px-2 py-0.5 rounded-full text-[11px] border', intentFilter === i ? 'bg-foreground text-background border-foreground' : 'border-border hover:bg-muted')}>
-                {i ? INTENTS[i].short : 'All'}
+          <div className="p-2 border-b border-border">
+            <div className="flex items-center gap-1 flex-wrap">
+              <Filter className="w-3.5 h-3.5 text-muted-foreground ml-1" />
+              <button type="button" onClick={() => setIntentFilters(new Set())}
+                className={cn('px-2 py-0.5 rounded-full text-[11px] border', intentFilters.size === 0 ? 'bg-foreground text-background border-foreground' : 'border-border hover:bg-muted')}>
+                All
               </button>
-            ))}
-            <button type="button" onClick={() => setShowClosed(v => !v)}
-              className={cn('ml-auto px-2 py-0.5 rounded-full text-[11px] border', showClosed ? 'bg-foreground text-background border-foreground' : 'border-border hover:bg-muted')}>
-              {showClosed ? 'Hiding none' : 'Show done'}
-            </button>
+              {['pickup', 'giveaway', 'trade'].map(i => (
+                <button key={i} type="button" onClick={() => toggleIntent(i)}
+                  className={cn('px-2 py-0.5 rounded-full text-[11px] border', intentFilters.has(i) ? 'bg-foreground text-background border-foreground' : 'border-border hover:bg-muted')}>
+                  {INTENTS[i].short}
+                </button>
+              ))}
+              <button type="button" onClick={() => setFiltersOpen(v => !v)}
+                className={cn('px-2 py-0.5 rounded-full text-[11px] border', (filtersOpen || detailCount > 0) ? 'border-primary text-primary' : 'border-border hover:bg-muted')}>
+                Shift details{detailCount > 0 ? ` · ${detailCount}` : ''}
+              </button>
+              <button type="button" onClick={() => setShowClosed(v => !v)}
+                className={cn('ml-auto px-2 py-0.5 rounded-full text-[11px] border', showClosed ? 'bg-foreground text-background border-foreground' : 'border-border hover:bg-muted')}>
+                {showClosed ? 'Hiding none' : 'Show done'}
+              </button>
+            </div>
+            {filtersOpen && (
+              <div className="mt-2 space-y-1.5">
+                <div className="grid grid-cols-2 gap-1.5">
+                  <label className="text-[10px] text-muted-foreground">
+                    Shift from
+                    <input type="date" value={detail.dateFrom} onChange={e => setDetail(d => ({ ...d, dateFrom: e.target.value }))}
+                      className="mt-0.5 w-full h-7 rounded-md border border-input bg-transparent px-2 text-xs outline-none focus:ring-1 focus:ring-ring" />
+                  </label>
+                  <label className="text-[10px] text-muted-foreground">
+                    Shift to
+                    <input type="date" value={detail.dateTo} onChange={e => setDetail(d => ({ ...d, dateTo: e.target.value }))}
+                      className="mt-0.5 w-full h-7 rounded-md border border-input bg-transparent px-2 text-xs outline-none focus:ring-1 focus:ring-ring" />
+                  </label>
+                  <label className="text-[10px] text-muted-foreground">
+                    Starts after
+                    <input type="time" value={detail.timeFrom} onChange={e => setDetail(d => ({ ...d, timeFrom: e.target.value }))}
+                      className="mt-0.5 w-full h-7 rounded-md border border-input bg-transparent px-2 text-xs outline-none focus:ring-1 focus:ring-ring" />
+                  </label>
+                  <label className="text-[10px] text-muted-foreground">
+                    Starts before
+                    <input type="time" value={detail.timeTo} onChange={e => setDetail(d => ({ ...d, timeTo: e.target.value }))}
+                      className="mt-0.5 w-full h-7 rounded-md border border-input bg-transparent px-2 text-xs outline-none focus:ring-1 focus:ring-ring" />
+                  </label>
+                </div>
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] text-muted-foreground">Date and time filters match a post's shift, so open pick-up requests are hidden while they're set.</p>
+                  {detailCount > 0 && (
+                    <button type="button" className="text-[11px] text-primary shrink-0 ml-2"
+                      onClick={() => setDetail({ dateFrom: '', dateTo: '', timeFrom: '', timeTo: '' })}>
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
           <div className="flex-1 overflow-y-auto">
             {board && !board.mine && (
@@ -180,7 +262,7 @@ export default function SwapBoard() {
             )}
             {posts.length === 0 && (
               <p className="text-xs text-muted-foreground text-center py-10 px-4">
-                Nothing on this board{intentFilter ? ' for that filter' : ''} yet.{board?.mine ? ' Post if you’re looking to pick up, give away, or trade a shift.' : ''}
+                Nothing on this board{(intentFilters.size > 0 || detailCount > 0) ? ' for those filters' : ''} yet.{board?.mine ? ' Post if you’re looking to pick up, give away, or trade a shift.' : ''}
               </p>
             )}
             {posts.map(p => <PostTile key={p.id} post={p} shift={shiftById(p.shift_id)} dealShift={shiftById(p.deal_shift_id)}
