@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/api/supabase';
 import { useCurrentMember } from '@/hooks/useCurrentMember';
 import { useRoles, useLocations } from '@/lib/useAppData';
 import {
   useMyConversations, useMessages, useMyBlocks, useMessagingDirectory, useConversationParticipants, useMessagingMutes,
   sendMessage, markRead, setMuted, setPinned, hideConversation, archiveConversation, setMessagingMute, startDM,
+  uploadMessageAttachments, messageAttachmentUrl,
   createGroup, updateGroup, addParticipants, removeParticipant, blockMember, unblockMember, useBlockedWith, softDeleteMessage, flagMessage,
 } from '@/lib/messaging';
 import PageHeader from '@/components/common/PageHeader';
@@ -29,7 +30,7 @@ import {
 import {
   MessageSquare, Plus, Users, Send, ChevronLeft, MoreVertical, Bell, BellOff, Ban, Hash, Trash2,
   AtSign, Flag, Settings2, VolumeX, Volume2, UserMinus, UserPlus, ShieldAlert, Building2, ShieldOff, ArrowLeftRight,
-  Pin, PinOff, LogOut, EyeOff,
+  Pin, PinOff, LogOut, EyeOff, Paperclip, Smile, Sparkles, X, FileText, Loader2,
 } from 'lucide-react';
 
 // Each kind of thread gets its own colour so the list scans at a glance:
@@ -111,6 +112,22 @@ export default function Messages() {
   const [flagReason, setFlagReason] = useState('');
   const [draft, setDraft] = useState('');
   const [pendingMentions, setPendingMentions] = useState([]); // mentions picked for this draft
+  const [pendingFiles, setPendingFiles] = useState([]); // File objects queued for this draft
+  const [msgStyle, setMsgStyle] = useState(null); // manager hype background: gold | navy | party
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const [sending, setSending] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const addFiles = (list) => {
+    const incoming = Array.from(list || []);
+    const next = [...pendingFiles];
+    for (const f of incoming) {
+      if (f.size > 10 * 1024 * 1024) { toast.error(`${f.name} is over 10MB`); continue; }
+      if (next.length >= 5) { toast.error('Up to 5 attachments per message'); break; }
+      next.push(f);
+    }
+    setPendingFiles(next);
+  };
   const [mentionQuery, setMentionQuery] = useState(null);     // null = picker closed
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
@@ -243,20 +260,26 @@ export default function Messages() {
   // ------------------------------------------------------------------ actions
   const handleSend = async () => {
     const text = draft.trim();
-    if (!text || !selectedId) return;
+    if ((!text && pendingFiles.length === 0) || !selectedId || sending) return;
     // only mentions whose @Label is still in the text count
     const used = pendingMentions
       .filter(m => text.includes(`@${m.label}`))
       .map(({ kind, target_id, label }) => ({ kind, target_id, label }));
-    setDraft(''); setPendingMentions([]); setMentionQuery(null);
+    const files = pendingFiles;
+    const style = msgStyle;
+    setSending(true);
+    setDraft(''); setPendingMentions([]); setMentionQuery(null); setPendingFiles([]); setMsgStyle(null); setEmojiOpen(false);
     try {
-      await sendMessage(selectedId, myId, text, used);
+      const attachments = files.length ? await uploadMessageAttachments(selectedId, files) : [];
+      await sendMessage(selectedId, myId, text, used, { attachments, style });
       qc.invalidateQueries({ queryKey: ['messages', selectedId] });
       qc.invalidateQueries({ queryKey: ['conversations', myId] });
     } catch (e) {
       toast.error(sendErrorMessage(e, { silenced: amMuted, broadcast: used.some(m => m.kind === 'role' || m.kind === 'all') }));
       qc.invalidateQueries({ queryKey: ['messaging-mutes'] }); // picks up a fresh mute
-      setDraft(text);
+      setDraft(text); setPendingFiles(files); setMsgStyle(style);
+    } finally {
+      setSending(false);
     }
   };
 
@@ -482,12 +505,17 @@ export default function Messages() {
                       <div className={cn('group flex flex-col', mine ? 'items-end' : 'items-start')}>
                         {showSender && <span className="text-[10px] text-muted-foreground ml-1 mb-0.5">{nameOf(m.sender_team_member_id)}</span>}
                         <div className={cn('max-w-[75%] rounded-2xl px-3 py-1.5 text-sm',
-                          mine ? 'bg-primary text-primary-foreground' : 'bg-muted',
+                          (!m.deleted_at && STYLE_CLASSES[m.style]) || (mine ? 'bg-primary text-primary-foreground' : 'bg-muted'),
+                          !m.deleted_at && STYLE_CLASSES[m.style] && 'px-4 py-2.5 shadow-md font-medium',
                           forMe && 'ring-2 ring-primary/50')}>
                           {m.deleted_at
                             ? <span className="italic opacity-60">Message removed</span>
-                            : <MessageBody body={m.body} mentions={m.mentions} mine={mine} />}
-                          <span className={cn('block text-[9px] mt-0.5', mine ? 'text-primary-foreground/60' : 'text-muted-foreground')}>
+                            : <>
+                                {m.body?.trim() ? <MessageBody body={m.body} mentions={m.mentions} mine={mine} /> : null}
+                                {(m.attachments || []).length > 0 && <MessageAttachments attachments={m.attachments} />}
+                              </>}
+                          <span className={cn('block text-[9px] mt-0.5',
+                            !m.deleted_at && STYLE_CLASSES[m.style] ? 'opacity-70' : mine ? 'text-primary-foreground/60' : 'text-muted-foreground')}>
                             {format(new Date(m.created_at), 'h:mm a')}{m.updated_at > m.created_at && !m.deleted_at ? ' · edited' : ''}
                           </span>
                         </div>
@@ -535,10 +563,63 @@ export default function Messages() {
                       ))}
                     </div>
                   )}
+                  {emojiOpen && (
+                    <div className="absolute bottom-full left-2 mb-1 rounded-md border border-border bg-popover shadow-md p-2 z-10 grid grid-cols-8 gap-0.5">
+                      {QUICK_EMOJIS.map(e => (
+                        <button key={e} type="button" className="w-8 h-8 rounded hover:bg-muted text-lg leading-none"
+                          onMouseDown={ev => ev.preventDefault()}
+                          onClick={() => { setDraft(d => d + e); inputRef.current?.focus(); }}>
+                          {e}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {pendingFiles.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pb-1.5">
+                      {pendingFiles.map((f, i) => (
+                        <span key={i} className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[11px] max-w-[180px]">
+                          <Paperclip className="w-3 h-3 shrink-0" />
+                          <span className="truncate">{f.name}</span>
+                          <button type="button" className="hover:text-destructive" onClick={() => setPendingFiles(p => p.filter((_, j) => j !== i))}>
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {msgStyle && (
+                    <p className="text-[10px] text-muted-foreground pb-1 ml-1">
+                      Highlighted message: <span className="font-medium capitalize">{msgStyle}</span> — tap ✨ to change or turn off.
+                    </p>
+                  )}
                   <div className="flex items-end gap-1.5">
                     <Button size="icon" variant={mentionQuery !== null ? 'secondary' : 'ghost'} className="h-9 w-9 shrink-0" title="Mention someone" onClick={openMentionPicker}>
                       <AtSign className="w-4 h-4" />
                     </Button>
+                    <Button size="icon" variant={emojiOpen ? 'secondary' : 'ghost'} className="h-9 w-9 shrink-0 hidden sm:inline-flex" title="Emoji" onClick={() => setEmojiOpen(v => !v)}>
+                      <Smile className="w-4 h-4" />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-9 w-9 shrink-0" title="Attach a file (up to 10MB)" onClick={() => fileInputRef.current?.click()}>
+                      <Paperclip className="w-4 h-4" />
+                    </Button>
+                    <input ref={fileInputRef} type="file" multiple className="hidden"
+                      accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
+                      onChange={e => { addFiles(e.target.files); e.target.value = ''; }} />
+                    {canBroadcast && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="icon" variant={msgStyle ? 'secondary' : 'ghost'} className="h-9 w-9 shrink-0" title="Highlight this message (managers)">
+                            <Sparkles className={cn('w-4 h-4', msgStyle && 'text-primary')} />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" side="top">
+                          <DropdownMenuItem onClick={() => setMsgStyle(null)}>No highlight</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setMsgStyle('gold')}><span className="w-3 h-3 rounded-full mr-2 bg-gradient-to-br from-[#d2ad74] to-[#86764e]" /> Gold</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setMsgStyle('navy')}><span className="w-3 h-3 rounded-full mr-2 bg-[#0c2340] ring-1 ring-[#d2ad74]" /> Navy</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setMsgStyle('party')}><span className="w-3 h-3 rounded-full mr-2 bg-gradient-to-br from-fuchsia-500 via-amber-400 to-rose-500" /> Party</DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                     <textarea
                       ref={inputRef}
                       value={draft} onChange={e => onDraftChange(e.target.value)}
@@ -553,7 +634,9 @@ export default function Messages() {
                       rows={1} placeholder="Message… (type @ to mention)"
                       className="flex-1 resize-none max-h-28 rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring"
                     />
-                    <Button size="icon" className="h-9 w-9 shrink-0" onClick={handleSend} disabled={!draft.trim()}><Send className="w-4 h-4" /></Button>
+                    <Button size="icon" className="h-9 w-9 shrink-0" onClick={handleSend} disabled={sending || (!draft.trim() && pendingFiles.length === 0)}>
+                      {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                    </Button>
                   </div>
                 </div>
               )}
@@ -660,6 +743,61 @@ export default function Messages() {
 }
 
 // Message text with each @mention highlighted.
+// quick-insert palette for desktop (phones use their native emoji keyboard,
+// which works in the box as-is)
+const QUICK_EMOJIS = [
+  '😀', '😂', '🥳', '🎉', '🔥', '💪', '👏', '🙌',
+  '❤️', '👍', '🤝', '😅', '😎', '🫡', '🙏', '💯',
+  '♠️', '♥️', '♦️', '♣️', '🏆', '💰', '⏰', '☕',
+];
+
+// manager hype backgrounds (enforced manager-only by a DB trigger)
+const STYLE_CLASSES = {
+  gold: 'bg-gradient-to-br from-[#d2ad74] to-[#86764e] text-black',
+  navy: 'bg-[#0c2340] text-white ring-1 ring-[#d2ad74]/70',
+  party: 'bg-gradient-to-br from-fuchsia-500 via-amber-400 to-rose-500 text-white',
+};
+
+const prettyFileSize = (b) => b < 1024 ? `${b} B` : b < 1048576 ? `${Math.round(b / 1024)} KB` : `${(b / 1048576).toFixed(1)} MB`;
+
+function MessageAttachments({ attachments }) {
+  return (
+    <div className="space-y-1.5 mt-1 first:mt-0">
+      {attachments.map((a, i) => <AttachmentItem key={a.path || i} att={a} />)}
+    </div>
+  );
+}
+
+function AttachmentItem({ att }) {
+  const isImage = (att.type || '').startsWith('image/');
+  // images get a signed URL up front for inline preview; other files sign on click
+  const { data: url } = useQuery({
+    queryKey: ['msg-att-url', att.path],
+    queryFn: () => messageAttachmentUrl(att.path),
+    enabled: isImage,
+    staleTime: 45 * 60 * 1000,
+  });
+  if (isImage) {
+    return url ? (
+      <a href={url} target="_blank" rel="noopener noreferrer" className="block">
+        <img src={url} alt={att.name} loading="lazy" className="max-h-56 max-w-full rounded-lg border border-black/10" />
+      </a>
+    ) : <div className="h-24 w-40 rounded-lg bg-black/10 animate-pulse" />;
+  }
+  const open = async () => {
+    try { window.open(await messageAttachmentUrl(att.path), '_blank', 'noopener'); }
+    catch { toast.error('Could not open that file'); }
+  };
+  return (
+    <button type="button" onClick={open}
+      className="flex items-center gap-2 rounded-lg bg-black/10 dark:bg-white/10 px-2.5 py-1.5 text-xs w-full text-left hover:bg-black/20 dark:hover:bg-white/20">
+      <FileText className="w-4 h-4 shrink-0" />
+      <span className="truncate flex-1">{att.name}</span>
+      {att.size ? <span className="opacity-60 shrink-0">{prettyFileSize(att.size)}</span> : null}
+    </button>
+  );
+}
+
 function MessageBody({ body, mentions, mine }) {
   const labels = (mentions || []).map(m => `@${m.label}`).filter(l => l.length > 1).sort((a, b) => b.length - a.length);
   if (!labels.length) return <span className="whitespace-pre-wrap break-words">{body}</span>;

@@ -70,7 +70,7 @@ export function useMessages(conversationId) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('messages')
-        .select('id, conversation_id, sender_team_member_id, body, mentions, deleted_at, created_at, updated_at')
+        .select('id, conversation_id, sender_team_member_id, body, mentions, attachments, style, deleted_at, created_at, updated_at')
         .eq('conversation_id', conversationId)
         .order('created_at', { ascending: true })
         .limit(300);
@@ -181,12 +181,35 @@ export function useOpenFlags(enabled = true) {
 // mentions: [{ kind: 'member'|'role'|'managers'|'all', target_id, label }]
 // The server refuses @role/@all from anyone below manager, and refuses any
 // send from a member an admin has silenced in that conversation.
-export async function sendMessage(conversationId, senderId, body, mentions = []) {
+export async function sendMessage(conversationId, senderId, body, mentions = [], { attachments = [], style = null } = {}) {
   const text = (body || '').trim();
-  if (!text) return;
+  if (!text && attachments.length === 0) return;
   const { error } = await supabase.from('messages')
-    .insert({ conversation_id: conversationId, sender_team_member_id: senderId, body: text, mentions });
+    .insert({ conversation_id: conversationId, sender_team_member_id: senderId, body: text, mentions, attachments, style });
   if (error) throw error;
+}
+
+// Attachments live in a private bucket under <conversation_id>/… — the
+// storage policies let only that conversation's participants (and moderators)
+// touch them. Returns the metadata rows stored on the message.
+export async function uploadMessageAttachments(conversationId, files) {
+  const out = [];
+  for (const file of files) {
+    const safe = file.name.replace(/[^\w.\- ]+/g, '_').slice(-80);
+    const path = `${conversationId}/${crypto.randomUUID()}-${safe}`;
+    const { error } = await supabase.storage.from('message-attachments')
+      .upload(path, file, { contentType: file.type || 'application/octet-stream' });
+    if (error) throw new Error(`Could not upload ${file.name}: ${error.message}`);
+    out.push({ path, name: file.name, type: file.type || '', size: file.size });
+  }
+  return out;
+}
+
+export async function messageAttachmentUrl(path) {
+  const { data, error } = await supabase.storage.from('message-attachments')
+    .createSignedUrl(path, 3600);
+  if (error) throw error;
+  return data.signedUrl;
 }
 
 export async function markRead(conversationId, memberId) {
