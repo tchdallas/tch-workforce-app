@@ -4,6 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { useCurrentMember } from '@/hooks/useCurrentMember';
 import ViewSchedule from './ViewSchedule';
 import { startOfWeek, addDays, format } from 'date-fns';
+import { fmtTime } from '@/lib/timeFmt';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Clipboard, Upload, FileText, Search, X, Copy as CopyIcon } from 'lucide-react';
@@ -347,7 +348,7 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
       const tmName = tm ? `${tm.preferredName || tm.firstName} ${tm.lastName}` : 'Open';
       const role = roles.find(r => r.id === data.roleId);
       logShiftEvent('shift_created', created.id,
-        `Created for ${tmName} — ${role?.name || ''} ${data.startDateTime ? format(new Date(data.startDateTime), 'MMM d, h:mm a') : ''}`,
+        `Created for ${tmName} — ${role?.name || ''} ${data.startDateTime ? format(new Date(data.startDateTime), 'MMM d') + ', ' + fmtTime(data.startDateTime, data.locationId) : ''}`,
         null,
         { teamMember: tmName, role: role?.name, start: data.startDateTime, end: data.endDateTime, status: data.status }
       );
@@ -398,7 +399,7 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
           const changes = [];
           if (data.roleId && prevShift.roleId !== data.roleId) changes.push(`Role: ${prevRole?.name} → ${newRole?.name}`);
           if (data.startDateTime && prevShift.startDateTime !== data.startDateTime)
-            changes.push(`Start: ${format(new Date(prevShift.startDateTime), 'MMM d h:mm a')} → ${format(new Date(data.startDateTime), 'MMM d h:mm a')}`);
+            changes.push(`Start: ${format(new Date(prevShift.startDateTime), 'MMM d')} ${fmtTime(prevShift.startDateTime, data.locationId)} → ${format(new Date(data.startDateTime), 'MMM d')} ${fmtTime(data.startDateTime, data.locationId)}`);
           if (changes.length) details = changes.join('; ');
         }
 
@@ -706,7 +707,7 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
         const role = roles.find(r => r.id === c.existing.roleId);
         return {
           name: m ? `${m.preferredName || m.firstName} ${m.lastName}` : 'This team member',
-          when: `${format(new Date(c.existing.startDateTime), 'EEE MMM d, h:mm a')} – ${format(new Date(c.existing.endDateTime), 'h:mm a')}`,
+          when: `${format(new Date(c.existing.startDateTime), 'EEE MMM d')}, ${fmtTime(c.existing.startDateTime, c.existing.locationId)} – ${fmtTime(c.existing.endDateTime, c.existing.locationId)}`,
           roleName: role?.name || '',
         };
       });
@@ -1071,6 +1072,7 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
             roles={shownRoles}
             teamMembers={teamMembers}
             dayStartHour={dayStartHour}
+            locationId={selectedLocation}
             onShiftClick={(shift) => setShiftModal({ open: true, shift })}
           />
         ) : viewMode === 'summary' ? (
@@ -1147,7 +1149,7 @@ function ScheduleBuilder({ assignedLocationIds = [] }) {
             {publishConfirm?.shortfalls.slice(0, 12).map((s, i) => (
               <div key={i} className="flex justify-between gap-2 px-2 py-1 rounded bg-red-50 dark:bg-red-950/20">
                 <span>{format(s.day, 'EEE')} · {s.roleName}</span>
-                <span className="tabular-nums text-red-600 dark:text-red-400">{format(s.from, 'h:mm a')}–{format(s.to, 'h:mm a')} · {s.min}/{s.required}</span>
+                <span className="tabular-nums text-red-600 dark:text-red-400">{fmtTime(s.from, selectedLocation)}–{fmtTime(s.to, selectedLocation)} · {s.min}/{s.required}</span>
               </div>
             ))}
             {publishConfirm && publishConfirm.shortfalls.length > 12 && (

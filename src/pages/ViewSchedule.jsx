@@ -127,6 +127,7 @@ export default function ViewSchedule({ assignedLocationIds = [] }) {
             roles={visibleRoles}
             teamMembers={teamMembers}
             dayStartHour={dayStartHour}
+            locationId={selectedLocation}
             readOnly
           />
         ) : viewMode === 'summary' ? (
@@ -136,6 +137,7 @@ export default function ViewSchedule({ assignedLocationIds = [] }) {
             roles={visibleRoles}
             teamMembers={teamMembers}
             dayStartHour={dayStartHour}
+            locationId={selectedLocation}
             onShiftClick={() => {}}
           />
         ) : (

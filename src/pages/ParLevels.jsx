@@ -19,6 +19,7 @@ import { Plus, Save, Wand2, Copy, Pencil, Trash2, Star, ChevronsUpDown, Check } 
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { cn } from '@/lib/utils';
+import { fmtTimeStr } from '@/lib/timeFmt';
 import { toast } from 'sonner';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -27,11 +28,10 @@ const DAY_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frida
 const pad = (n) => String(n).padStart(2, '0');
 const toMin = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + (m || 0); };
 const gd = (t, sh) => ((toMin(t) - sh * 60) + 1440) % 1440;
-const fmt = (t) => {
-  const [h, m] = t.split(':').map(Number);
-  const ap = h < 12 ? 'AM' : 'PM';
-  const h12 = h % 12 === 0 ? 12 : h % 12;
-  return `${h12}:${pad(m)} ${ap}`;
+// +8h with wrap-around, for the fill row's To following From
+const plus8h = (t) => {
+  const total = (toMin(t) + 480) % 1440;
+  return `${pad(Math.floor(total / 60))}:${pad(total % 60)}`;
 };
 const key = (day, t) => `${day}|${t}`;
 
@@ -213,6 +213,7 @@ export default function ParLevels() {
 
   // ---- quick fill ----
   const [fill, setFill] = useState({ days: 'all', from: '18:00', to: '02:00', count: '' });
+  const fmt = (t) => fmtTimeStr(t, locationId); // clock format follows the club
   const applyFill = () => {
     const count = parseInt(fill.count, 10);
     if (!Number.isFinite(count) || count < 0) { toast.error('Enter a headcount to fill'); return; }
@@ -373,7 +374,7 @@ export default function ParLevels() {
                 </SelectContent>
               </Select>
             </div>
-            <div><Label className="text-[11px]">From</Label><Input type="time" value={fill.from} onChange={e => setFill(f => ({ ...f, from: e.target.value }))} className="w-[120px] h-8" /></div>
+            <div><Label className="text-[11px]">From</Label><Input type="time" value={fill.from} onChange={e => setFill(f => ({ ...f, from: e.target.value, to: plus8h(e.target.value) }))} className="w-[120px] h-8" /></div>
             <div><Label className="text-[11px]">To</Label><Input type="time" value={fill.to} onChange={e => setFill(f => ({ ...f, to: e.target.value }))} className="w-[120px] h-8" /></div>
             <div><Label className="text-[11px]">Need</Label><Input type="number" min="0" placeholder="#" value={fill.count} onChange={e => setFill(f => ({ ...f, count: e.target.value }))} className="w-[70px] h-8" /></div>
             <Button size="sm" variant="secondary" className="h-8" onClick={applyFill}>Fill</Button>

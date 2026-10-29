@@ -1,5 +1,6 @@
 ﻿import React, { useMemo } from 'react';
 import { formatEndTime } from '@/lib/utils';
+import { fmtTime } from '@/lib/timeFmt';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
@@ -252,7 +253,7 @@ export default function IncomingShiftOffers({ currentMemberId }) {
   };
 
   const fmtShift = (s) => s
-    ? `${format(new Date(s.startDateTime), 'EEE, MMM d · h:mm a')} – ${formatEndTime(s.startDateTime, s.endDateTime)}`
+    ? `${format(new Date(s.startDateTime), 'EEE, MMM d')} · ${fmtTime(s.startDateTime, s.locationId)} – ${formatEndTime(s.startDateTime, s.endDateTime, s.locationId)}`
     : 'their shift';
 
   return (
@@ -330,7 +331,7 @@ export default function IncomingShiftOffers({ currentMemberId }) {
                         {role?.name || 'Shift'}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {format(new Date(shift.startDateTime), 'EEE, MMM d · h:mm a')} – {formatEndTime(shift.startDateTime, shift.endDateTime)}
+                        {format(new Date(shift.startDateTime), 'EEE, MMM d')} · {fmtTime(shift.startDateTime, shift.locationId)} – {formatEndTime(shift.startDateTime, shift.endDateTime, shift.locationId)}
                       </p>
                       {loc && <p className="text-xs text-muted-foreground">{loc.name}</p>}
                       {shift && requireApprovalFor(shift.id) && (
@@ -393,7 +394,7 @@ export default function IncomingShiftOffers({ currentMemberId }) {
                         {role?.name || 'Shift'}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {format(new Date(shift.startDateTime), 'EEE, MMM d · h:mm a')} – {formatEndTime(shift.startDateTime, shift.endDateTime)}
+                        {format(new Date(shift.startDateTime), 'EEE, MMM d')} · {fmtTime(shift.startDateTime, shift.locationId)} – {formatEndTime(shift.startDateTime, shift.endDateTime, shift.locationId)}
                       </p>
                       {loc && <p className="text-xs text-muted-foreground">{loc.name}</p>}
                       {shift && requireApprovalFor(shift.id) && (

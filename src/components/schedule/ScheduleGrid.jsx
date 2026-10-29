@@ -1,7 +1,8 @@
 ﻿import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { format, addDays, isSameDay } from 'date-fns';
 import { cn, businessDayOf } from '@/lib/utils';
-import { Plus, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
+import { fmtHour } from '@/lib/timeFmt';
+import { Plus, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, AlertTriangle } from 'lucide-react';
 import ShiftCard from './ShiftCard';
 import { roleDayCoverage, dayParSummary } from '@/lib/parCoverage';
 
@@ -319,11 +320,42 @@ export default function ScheduleGrid({
     </>
   );
 
+  // Week summary per member for the name tile: scheduled hours (minus breaks),
+  // shift count, and whether any two shifts overlap (double-booked).
+  const tmSummaries = React.useMemo(() => {
+    const by = new Map();
+    shifts.forEach(s => {
+      if (!s.teamMemberId || s.status === 'cancelled') return;
+      if (!by.has(s.teamMemberId)) by.set(s.teamMemberId, []);
+      by.get(s.teamMemberId).push(s);
+    });
+    const out = new Map();
+    by.forEach((list, tmId) => {
+      let mins = 0;
+      list.forEach(s => {
+        const dur = (new Date(s.endDateTime) - new Date(s.startDateTime)) / 60000 - (s.breakMinutes || 0);
+        if (dur > 0) mins += dur;
+      });
+      const sorted = [...list].sort((a, b) => new Date(a.startDateTime) - new Date(b.startDateTime));
+      let conflict = false;
+      let maxEnd = -Infinity;
+      sorted.forEach(s => {
+        const st = +new Date(s.startDateTime);
+        if (st < maxEnd) conflict = true;
+        maxEnd = Math.max(maxEnd, +new Date(s.endDateTime));
+      });
+      out.set(tmId, { hours: mins / 60, count: list.length, conflict });
+    });
+    return out;
+  }, [shifts]);
+
   const TmLabel = ({ tm }) => {
     const name = `${tm.preferredName || tm.firstName} ${tm.lastName?.[0]}.`;
+    const sum = tmSummaries.get(tm.id);
+    const hoursLabel = sum ? `${(Math.round(sum.hours * 10) / 10).toString().replace(/\.0$/, '')}h` : null;
     return (
       <div
-        className={cn("p-2 flex items-center select-none", !readOnly && "cursor-context-menu")}
+        className={cn("p-2 flex flex-col justify-center select-none min-w-0", !readOnly && "cursor-context-menu")}
         onContextMenu={readOnly ? undefined : (e) => handleTmContextMenu(e, tm.id)}
       >
         {onTeamMemberClick ? (
@@ -337,6 +369,16 @@ export default function ScheduleGrid({
           </button>
         ) : (
           <span className="text-xs font-medium truncate">{name}</span>
+        )}
+        {sum && (
+          <span className="flex items-center gap-1 text-[10px] text-muted-foreground tabular-nums mt-0.5">
+            {hoursLabel} · {sum.count} shift{sum.count !== 1 ? 's' : ''}
+            {sum.conflict && (
+              <span title="Overlapping shifts this week" aria-label="Overlapping shifts this week" className="inline-flex">
+                <AlertTriangle className="w-3 h-3 text-amber-500 shrink-0" />
+              </span>
+            )}
+          </span>
         )}
       </div>
     );
@@ -433,7 +475,7 @@ export default function ScheduleGrid({
   // add a shift to any hour/day cell and pick the team member.
   if (viewMode === 'role_time') {
     const HOURS = Array.from({ length: 24 }, (_, i) => (dayStartHour + i) % 24); // 4a → 3a
-    const hourLabel = (h) => { const d = new Date(); d.setHours(h, 0, 0, 0); return format(d, 'h a'); };
+    const hourLabel = (h) => { const d = new Date(); d.setHours(h, 0, 0, 0); return fmtHour(d, selectedLocation); };
     return (
       <div className="overflow-x-auto h-full overflow-y-auto">
       <div style={{ minWidth: `${160 + spanDays * (isCompact ? 60 : 80)}px` }}>

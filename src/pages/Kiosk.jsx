@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/api/supabase';
 import { format } from 'date-fns';
+import { fmtTime, useTimeFormats } from '@/lib/timeFmt';
 import useVersionCheck from '@/hooks/useVersionCheck';
 
 // Fullscreen time-clock kiosk. Runs signed in as a kiosk device account (or any
 // manager+). Members punch by badge number; a webcam photo is captured with
 // every punch and stored privately for timesheet review.
 export default function Kiosk() {
+  useTimeFormats(); // kiosk renders outside the main layout — hydrate here
   const [badge, setBadge] = useState('');
   const [result, setResult] = useState(null); // { action, name, time, hours }
   const [error, setError] = useState(null);
@@ -216,7 +218,7 @@ export default function Kiosk() {
                     className="w-full rounded-xl border border-[#d2ad74]/50 bg-[#d2ad74]/10 px-4 py-3 text-left hover:bg-[#d2ad74]/20 disabled:opacity-40"
                   >
                     <span className="font-semibold">{s.role || 'Shift'}</span>
-                    <span className="text-white/70"> · {format(new Date(s.start_at), 'h:mm a')} – {format(new Date(s.end_at), 'h:mm a')}</span>
+                    <span className="text-white/70"> · {fmtTime(s.start_at)} – {fmtTime(s.end_at)}</span>
                     {s.location && <span className="block text-xs text-white/50 mt-0.5">{s.location}</span>}
                   </button>
                 ))}
@@ -277,9 +279,9 @@ export default function Kiosk() {
             {!result.unscheduled && result.lateMinutes != null && (
               <p className={`text-sm mt-0.5 ${result.lateMinutes > 5 ? 'text-red-300' : 'text-white/70'}`}>
                 {result.lateMinutes > 5
-                  ? `${result.lateMinutes} min late (scheduled ${format(new Date(result.scheduledStart), 'h:mm a')})`
+                  ? `${result.lateMinutes} min late (scheduled ${fmtTime(result.scheduledStart)})`
                   : result.lateMinutes < -5
-                    ? `${Math.abs(result.lateMinutes)} min early (scheduled ${format(new Date(result.scheduledStart), 'h:mm a')})`
+                    ? `${Math.abs(result.lateMinutes)} min early (scheduled ${fmtTime(result.scheduledStart)})`
                     : 'On time'}
               </p>
             )}

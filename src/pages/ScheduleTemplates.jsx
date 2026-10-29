@@ -14,11 +14,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { fmtTimeStr } from '@/lib/timeFmt';
 import { toast } from 'sonner';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-function ShiftSlot({ shift, role, onEdit, onRemove, selected, onSelect }) {
+function ShiftSlot({ shift, role, onEdit, onRemove, selected, onSelect, locationId }) {
   const bg = role?.color ? `${role.color}22` : '#6366f122';
   const border = role?.color || '#6366f1';
   return (
@@ -32,7 +33,7 @@ function ShiftSlot({ shift, role, onEdit, onRemove, selected, onSelect }) {
       onDoubleClick={(e) => { e.stopPropagation(); onEdit(); }}
     >
       <div className="font-semibold truncate">{role?.name || 'Unknown'}</div>
-      <div className="text-muted-foreground">{shift.startTime} – {shift.endTime}</div>
+      <div className="text-muted-foreground">{fmtTimeStr(shift.startTime, locationId)} – {fmtTimeStr(shift.endTime, locationId)}</div>
       <button
         className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 p-0.5 rounded bg-destructive/80 hover:bg-destructive text-white flex items-center justify-center"
         style={{ width: 16, height: 16, fontSize: 11, lineHeight: 1 }}
@@ -43,7 +44,7 @@ function ShiftSlot({ shift, role, onEdit, onRemove, selected, onSelect }) {
   );
 }
 
-function ShiftSlotModal({ open, onClose, onSave, roles, initial, isEditing = false }) {
+function ShiftSlotModal({ open, onClose, onSave, roles, initial, isEditing = false, locationId }) {
   const [roleId, setRoleId] = useState(initial?.roleId || '');
   const [dayOfWeek, setDayOfWeek] = useState(initial?.dayOfWeek ?? 0);
   const [startTime, setStartTime] = useState(initial?.startTime || '09:00');
@@ -155,7 +156,7 @@ function ShiftSlotModal({ open, onClose, onSave, roles, initial, isEditing = fal
           </div>
           {!isEditing && quantity > 1 && (
             <p className="text-xs text-muted-foreground">
-              Will add <span className="font-semibold text-foreground">{quantity}</span> open {role?.name || 'role'} shifts on {DAYS[dayOfWeek]} at {startTime}
+              Will add <span className="font-semibold text-foreground">{quantity}</span> open {role?.name || 'role'} shifts on {DAYS[dayOfWeek]} at {fmtTimeStr(startTime, locationId)}
             </p>
           )}
         </div>
@@ -415,6 +416,7 @@ function TemplateGrid({ template, roles, onUpdate }) {
                         <ShiftSlot
                           key={i}
                           shift={s}
+                          locationId={template.locationId}
                           role={role.name === 'Unknown role' ? null : role}
                           selected={selectedIndices.has(i)}
                           onSelect={(e) => handleSelect(i, e)}
@@ -470,6 +472,7 @@ function TemplateGrid({ template, roles, onUpdate }) {
         roles={roles}
         initial={slotModal.editing}
         isEditing={slotModal.editIndex !== null}
+        locationId={template.locationId}
       />
     </>
   );

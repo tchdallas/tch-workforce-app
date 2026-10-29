@@ -1,13 +1,14 @@
 import React, { useMemo } from 'react';
 import { format, addDays } from 'date-fns';
 import { cn, businessDayOf, formatEndTime } from '@/lib/utils';
+import { fmtTime, fmtHour } from '@/lib/timeFmt';
 import { Moon } from 'lucide-react';
 
 // Hour-axis view of one business day: columns are hours (starting at the
 // business-day boundary), rows are roles, shifts are positioned bars. The
 // natural way to see a 24/7 operation's coverage at a glance.
 export default function DayTimeline({
-  date, shifts, roles, teamMembers = [], dayStartHour = 0, onShiftClick, readOnly = false,
+  date, shifts, roles, teamMembers = [], dayStartHour = 0, onShiftClick, readOnly = false, locationId,
 }) {
   const windowStart = useMemo(() => {
     const d = new Date(date);
@@ -18,9 +19,9 @@ export default function DayTimeline({
   const hours = useMemo(
     () => Array.from({ length: 24 }, (_, i) => {
       const h = new Date(windowStart.getTime() + i * 3600000);
-      return { label: format(h, 'h a'), isDayBreak: h.getHours() === 0 };
+      return { label: fmtHour(h, locationId), isDayBreak: h.getHours() === 0 };
     }),
-    [windowStart]
+    [windowStart, locationId] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const dayStr = format(date, 'yyyy-MM-dd');
@@ -82,7 +83,7 @@ export default function DayTimeline({
   if (dayShifts.length === 0) {
     return (
       <div className="p-10 text-center text-sm text-muted-foreground">
-        No shifts on {format(date, 'EEEE, MMM d')}{dayStartHour > 0 ? ` (business day starts ${format(windowStart, 'h a')})` : ''}.
+        No shifts on {format(date, 'EEEE, MMM d')}{dayStartHour > 0 ? ` (business day starts ${fmtHour(windowStart, locationId)})` : ''}.
       </div>
     );
   }
@@ -127,7 +128,7 @@ export default function DayTimeline({
                     key={shift.id}
                     type="button"
                     onClick={readOnly ? undefined : () => onShiftClick?.(shift)}
-                    title={`${getTmName(shift.teamMemberId)} · ${format(new Date(shift.startDateTime), 'h:mm a')} – ${formatEndTime(shift.startDateTime, shift.endDateTime)}`}
+                    title={`${getTmName(shift.teamMemberId)} · ${fmtTime(shift.startDateTime, shift.locationId)} – ${formatEndTime(shift.startDateTime, shift.endDateTime, shift.locationId)}`}
                     className={cn(
                       'absolute rounded-md border text-left px-1.5 overflow-hidden whitespace-nowrap',
                       !readOnly && 'cursor-pointer hover:ring-1 hover:ring-primary/60',
@@ -146,7 +147,7 @@ export default function DayTimeline({
                   >
                     <span className="text-[10px] font-medium">{getTmName(shift.teamMemberId)}</span>
                     <span className="text-[9px] text-muted-foreground ml-1">
-                      {format(new Date(shift.startDateTime), 'h:mm a')}
+                      {fmtTime(shift.startDateTime, shift.locationId)}
                     </span>
                     {runsPast && <span className="text-[9px] text-indigo-400 ml-0.5">»</span>}
                     {new Date(shift.endDateTime).getDate() !== new Date(shift.startDateTime).getDate() && (

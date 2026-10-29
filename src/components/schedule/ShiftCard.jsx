@@ -1,5 +1,6 @@
 ﻿import React, { useRef } from 'react';
 import { cn, formatEndTime, isOvernight } from '@/lib/utils';
+import { fmtTime } from '@/lib/timeFmt';
 import { format } from 'date-fns';
 import { AlertTriangle, MessageSquare, EyeOff, Edit2, Moon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -76,7 +77,7 @@ export default function ShiftCard({
             {showRole && !isOpen ? (role?.name || displayName) : displayName}
           </p>
           <p className={cn("text-muted-foreground", compact ? "text-[9px]" : "text-[11px]")}>
-            {format(new Date(shift.startDateTime), 'h:mm a')} – {formatEndTime(shift.startDateTime, shift.endDateTime)}
+            {fmtTime(shift.startDateTime, shift.locationId)} – {formatEndTime(shift.startDateTime, shift.endDateTime, shift.locationId)}
           </p>
         </div>
         <div className="flex items-center gap-0.5 shrink-0">

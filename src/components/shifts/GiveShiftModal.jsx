@@ -1,5 +1,6 @@
 ﻿import React, { useState, useMemo } from 'react';
 import { formatEndTime } from '@/lib/utils';
+import { fmtTime } from '@/lib/timeFmt';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { supabase } from '@/api/supabase';
@@ -150,7 +151,7 @@ export default function GiveShiftModal({ open, onClose, shift, role, location, c
       }
       const offerer = teamMembers.find(t => t.id === currentMemberId);
       const offererName = offerer ? `${offerer.preferredName || offerer.firstName} ${offerer.lastName}` : 'A team member';
-      const shiftTime = `${format(new Date(shift.startDateTime), 'EEE MMM d, h:mm a')} – ${formatEndTime(shift.startDateTime, shift.endDateTime)}`;
+      const shiftTime = `${format(new Date(shift.startDateTime), 'EEE MMM d')}, ${fmtTime(shift.startDateTime, shift.locationId)} – ${formatEndTime(shift.startDateTime, shift.endDateTime, shift.locationId)}`;
 
       // Trade: I give my shift and want one of theirs back
       if (wantMode === 'trade' && wantShiftId) {
@@ -253,7 +254,7 @@ export default function GiveShiftModal({ open, onClose, shift, role, location, c
         <div className="rounded-lg border bg-muted/40 p-3 text-sm space-y-1">
           <p className="font-medium">{role?.name || 'Unknown Role'}</p>
           <p className="text-muted-foreground text-xs">
-            {format(new Date(shift.startDateTime), 'EEE, MMM d · h:mm a')} – {formatEndTime(shift.startDateTime, shift.endDateTime)}
+            {format(new Date(shift.startDateTime), 'EEE, MMM d')} · {fmtTime(shift.startDateTime, shift.locationId)} – {formatEndTime(shift.startDateTime, shift.endDateTime, shift.locationId)}
           </p>
           {location && <p className="text-xs text-muted-foreground">{location.name}</p>}
         </div>
@@ -368,7 +369,7 @@ export default function GiveShiftModal({ open, onClose, shift, role, location, c
                             wantShiftId === s.id ? 'border-primary bg-primary/5 text-primary' : 'border-border hover:bg-muted/50'
                           }`}
                         >
-                          {format(new Date(s.startDateTime), 'EEE, MMM d · h:mm a')} – {formatEndTime(s.startDateTime, s.endDateTime)}
+                          {format(new Date(s.startDateTime), 'EEE, MMM d')} · {fmtTime(s.startDateTime, s.locationId)} – {formatEndTime(s.startDateTime, s.endDateTime, s.locationId)}
                         </button>
                       ))}
                     </div>

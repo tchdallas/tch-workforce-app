@@ -10,6 +10,7 @@ import PageErrorBoundary from '@/components/common/PageErrorBoundary';
 import BugReporter from '@/components/common/BugReporter';
 import TutorialModal from '@/components/common/TutorialModal';
 import { useLocations, useRoles, useTeamMembers } from '@/lib/useAppData';
+import { useTimeFormats } from '@/lib/timeFmt';
 import { useCurrentMember } from '@/hooks/useCurrentMember';
 import useRealtimeNotifications from '@/hooks/useRealtimeNotifications';
 import useVersionCheck from '@/hooks/useVersionCheck';
@@ -23,6 +24,8 @@ export default function AppLayout() {
   useLocations();
   useRoles();
   useTeamMembers();
+  // per-location clock format (12h/24h) — hydrates the fmtTime/formatEndTime cache
+  useTimeFormats();
   // live notification toasts + bell refresh
   useRealtimeNotifications();
   // stale open tabs get an "Update now" prompt after each deploy

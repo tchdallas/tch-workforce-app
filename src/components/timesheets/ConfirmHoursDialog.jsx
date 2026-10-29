@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { Check, Clock } from 'lucide-react';
 import { format } from 'date-fns';
+import { fmtTime } from '@/lib/timeFmt';
 import { toast } from 'sonner';
 
 const fmtDT = (d) => (d ? format(new Date(d), "yyyy-MM-dd'T'HH:mm") : '');
@@ -84,7 +85,7 @@ export default function ConfirmHoursDialog({ entry, memberId, onClose }) {
                 {format(new Date(inAt), 'EEEE, MMM d')}
               </p>
               <p className="text-sm tabular-nums mt-0.5">
-                {format(new Date(inAt), 'h:mm a')} – {outAt ? format(new Date(outAt), 'h:mm a') : '—'}
+                {fmtTime(inAt, entry.location_id)} – {outAt ? fmtTime(outAt, entry.location_id) : '—'}
                 {outAt && (
                   <span className="text-muted-foreground ml-2">
                     ({((new Date(outAt) - new Date(inAt)) / 3600000).toFixed(2)} h)

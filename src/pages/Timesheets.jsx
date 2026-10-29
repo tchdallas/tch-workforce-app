@@ -19,6 +19,7 @@ import {
   approveEntry, proposeEntry, acceptCounter, forceReminder, markExported,
 } from '@/lib/timesheets';
 import { cn } from '@/lib/utils';
+import { fmtTime } from '@/lib/timeFmt';
 import { invalidateNavBadges } from '@/hooks/useNavBadges';
 
 const fmtDT = (d) => format(new Date(d), "yyyy-MM-dd'T'HH:mm");
@@ -286,10 +287,10 @@ export default function Timesheets() {
                   {list.map(e => (
                     <div key={e.id} className="flex items-center gap-3 px-4 py-2 text-sm">
                       <span className="w-24 text-muted-foreground">{format(new Date(e.clockIn), 'EEE, MMM d')}</span>
-                      <span className="tabular-nums">{format(new Date(e.clockIn), 'h:mm a')}</span>
+                      <span className="tabular-nums">{fmtTime(e.clockIn, e.locationId)}</span>
                       <span className="text-muted-foreground">–</span>
                       {e.clockOut
-                        ? <span className="tabular-nums">{format(new Date(e.clockOut), 'h:mm a')}</span>
+                        ? <span className="tabular-nums">{fmtTime(e.clockOut, e.locationId)}</span>
                         : <Badge className="text-[10px] bg-emerald-100 text-emerald-700 border-0">on the clock</Badge>}
                       <span className="ml-auto tabular-nums text-muted-foreground">
                         {e.clockOut ? `${hoursOf(e).toFixed(2)} h` : ''}

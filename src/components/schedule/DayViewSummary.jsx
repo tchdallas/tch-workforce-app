@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { format, isSameDay } from 'date-fns';
 import { cn, businessDayOf, formatEndTime } from '@/lib/utils';
+import { fmtTime, fmtTimeStr } from '@/lib/timeFmt';
 import { ChevronDown, ChevronRight, User, Clock, Edit2 } from 'lucide-react';
 import { roleDayCoverage, coverageClasses } from '@/lib/parCoverage';
 
@@ -40,7 +41,7 @@ export default function DayViewSummary({ date, shifts, roles, teamMembers = [], 
     dayShifts.forEach(shift => {
       const roleId = shift.roleId;
       if (!roleId) return;
-      const time = format(new Date(shift.startDateTime), 'h:mm a');
+      const time = format(new Date(shift.startDateTime), 'HH:mm'); // canonical key; rendered via fmtTimeStr
       if (!map[roleId]) map[roleId] = {};
       if (!map[roleId][time]) map[roleId][time] = [];
       map[roleId][time].push(shift);
@@ -51,17 +52,8 @@ export default function DayViewSummary({ date, shifts, roles, teamMembers = [], 
   // All unique start times across all roles, sorted chronologically
   const allTimes = useMemo(() => {
     const timesSet = new Set();
-    dayShifts.forEach(s => timesSet.add(format(new Date(s.startDateTime), 'h:mm a')));
-    return [...timesSet].sort((a, b) => {
-      const toMin = t => {
-        const [hm, period] = t.split(' ');
-        let [h, m] = hm.split(':').map(Number);
-        if (period === 'PM' && h !== 12) h += 12;
-        if (period === 'AM' && h === 12) h = 0;
-        return h * 60 + m;
-      };
-      return toMin(a) - toMin(b);
-    });
+    dayShifts.forEach(s => timesSet.add(format(new Date(s.startDateTime), 'HH:mm')));
+    return [...timesSet].sort(); // HH:mm sorts lexically
   }, [dayShifts]);
 
   const rolesWithShifts = activeRoles.filter(r => roleData[r.id]);
@@ -165,7 +157,7 @@ export default function DayViewSummary({ date, shifts, roles, teamMembers = [], 
                         className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[11px] tabular-nums', coverageClasses(c.status))}
                         title={c.status === 'short' ? 'Understaffed' : c.status === 'over' ? 'Overstaffed' : 'Met'}
                       >
-                        {format(c.start, 'h:mm a')}–{format(c.end, 'h:mm a')} · {c.min}/{c.required}
+                        {fmtTime(c.start, locationId)}–{fmtTime(c.end, locationId)} · {c.min}/{c.required}
                       </span>
                     ))}
                   </div>
@@ -187,7 +179,7 @@ export default function DayViewSummary({ date, shifts, roles, teamMembers = [], 
                       >
                         {/* Time column */}
                         <div className="w-28 flex-shrink-0 px-4 py-2.5">
-                          <span className="text-xs font-mono text-muted-foreground">{time}</span>
+                          <span className="text-xs font-mono text-muted-foreground">{fmtTimeStr(time, locationId)}</span>
                         </div>
 
                         {/* Count pill */}
@@ -223,7 +215,7 @@ export default function DayViewSummary({ date, shifts, roles, teamMembers = [], 
                           {slotShifts.map(shift => {
                             const tmName = getTmName(shift.teamMemberId);
                             const duration = getShiftDuration(shift);
-                            const endTime = formatEndTime(shift.startDateTime, shift.endDateTime);
+                            const endTime = formatEndTime(shift.startDateTime, shift.endDateTime, shift.locationId);
 
                             return (
                               <div

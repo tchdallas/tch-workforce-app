@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { Clock, UserX, Trash2, ArrowLeftRight, FileText } from 'lucide-react';
 import { cn, formatEndTime } from '@/lib/utils';
+import { fmtTime } from '@/lib/timeFmt';
 
 export default function RoadmapShiftActionModal({
   open, onClose, shift, teamMember, role, teamMembers, allShifts = [], availabilities = [],
@@ -141,7 +142,7 @@ export default function RoadmapShiftActionModal({
             <div className="flex items-center gap-1 mt-1">
               <Clock className="w-3 h-3 text-muted-foreground" />
               <span className="text-xs text-muted-foreground">
-                {format(new Date(shift.startDateTime), 'h:mm a')} – {formatEndTime(shift.startDateTime, shift.endDateTime)}
+                {fmtTime(shift.startDateTime, shift.locationId)} – {formatEndTime(shift.startDateTime, shift.endDateTime, shift.locationId)}
               </span>
             </div>
           </div>

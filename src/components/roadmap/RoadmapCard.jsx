@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { format, differenceInMinutes } from 'date-fns';
+import { fmtTime } from '@/lib/timeFmt';
 import { Clock, AlertTriangle, ArrowRightLeft, MessageSquare, FileText } from 'lucide-react';
 
 const statusConfig = {
@@ -98,7 +99,7 @@ export default function RoadmapCard({ shift, teamMember, role, location, status,
           <div className="flex items-center gap-1.5 mt-1">
             <Clock className="w-3 h-3 text-muted-foreground" />
             <span className="text-xs text-muted-foreground">
-              {format(start, 'h:mm a')} – {format(end, 'h:mm a')}
+              {fmtTime(start, shift.locationId)} – {fmtTime(end, shift.locationId)}
             </span>
           </div>
         </div>

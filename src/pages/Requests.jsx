@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { formatEndTime, cn } from '@/lib/utils';
+import { fmtTime } from '@/lib/timeFmt';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -500,7 +501,7 @@ function AssignGiveawayDialog({ request, onClose, teamMembers, roles, locations,
               <>
                 <p><span className="text-muted-foreground">Shift:</span> {role?.name || '—'} · {location?.name || '—'}</p>
                 <p className="text-xs text-muted-foreground">
-                  {format(new Date(shift.startDateTime), 'EEE, MMM d · h:mm a')} – {formatEndTime(shift.startDateTime, shift.endDateTime)}
+                  {format(new Date(shift.startDateTime), 'EEE, MMM d')} · {fmtTime(shift.startDateTime, shift.locationId)} – {formatEndTime(shift.startDateTime, shift.endDateTime, shift.locationId)}
                 </p>
               </>
             ) : (

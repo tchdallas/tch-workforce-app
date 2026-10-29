@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { formatEndTime, businessDayOf } from '@/lib/utils';
+import { fmtTime } from '@/lib/timeFmt';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -89,7 +90,7 @@ export default function AssignOpenShiftModal({ open, onClose, shift, role, locat
             <div className="flex items-center gap-1.5">
               <Clock className="w-3 h-3 text-muted-foreground" />
               <span className="text-xs text-muted-foreground">
-                {format(new Date(shift.startDateTime), 'EEE, MMM d · h:mm a')} – {formatEndTime(shift.startDateTime, shift.endDateTime)}
+                {format(new Date(shift.startDateTime), 'EEE, MMM d')} · {fmtTime(shift.startDateTime, shift.locationId)} – {formatEndTime(shift.startDateTime, shift.endDateTime, shift.locationId)}
               </span>
             </div>
           </div>

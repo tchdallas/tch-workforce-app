@@ -19,6 +19,7 @@ import { useMessagingDirectory } from '@/lib/messaging';
 import { useCurrentMember } from '@/hooks/useCurrentMember';
 import { useMutation } from '@tanstack/react-query';
 import { format as formatDate } from 'date-fns';
+import { fmtTime } from '@/lib/timeFmt';
 import { toast } from 'sonner';
 
 export default function LiveRoadmap() {
@@ -56,13 +57,13 @@ export default function LiveRoadmap() {
     const [hours, minutes] = lateTime.split(':').map(Number);
     const arrival = new Date(shift.startDateTime);
     arrival.setHours(hours, minutes, 0, 0);
-    const note = `Late arrival: ${formatDate(arrival, 'h:mm a')} (scheduled ${formatDate(new Date(shift.startDateTime), 'h:mm a')})`;
+    const note = `Late arrival: ${fmtTime(arrival, shift.locationId)} (scheduled ${fmtTime(shift.startDateTime, shift.locationId)})`;
     await base44.entities.Shift.update(shift.id, {
       internalNotes: shift.internalNotes ? `${shift.internalNotes}\n${note}` : note,
       recentChangeFlag: true,
     });
     invalidateRoadmap();
-    toast.success(`Marked as late — arrived ${formatDate(arrival, 'h:mm a')}`);
+    toast.success(`Marked as late — arrived ${fmtTime(arrival, shift.locationId)}`);
   };
 
   const handleReplaceTeamMember = async (shift, newMemberId) => {
@@ -220,8 +221,8 @@ export default function LiveRoadmap() {
             : <Badge variant="outline" className="text-[9px] px-1.5 py-0 shrink-0">Scheduled</Badge>}
         </div>
         <p className="text-xs text-muted-foreground mt-0.5">
-          {e.role || '—'} · in since {format(new Date(e.clock_in), 'h:mm a')}
-          {e.shift_end && <> · until {format(new Date(e.shift_end), 'h:mm a')}</>}
+          {e.role || '—'} · in since {fmtTime(e.clock_in, e.location_id)}
+          {e.shift_end && <> · until {fmtTime(e.shift_end, e.location_id)}</>}
         </p>
         {e.location && <p className="text-[11px] text-muted-foreground">{e.location}</p>}
       </div>
@@ -241,7 +242,7 @@ export default function LiveRoadmap() {
   return (
     <div className="max-w-7xl mx-auto">
       <PullToRefreshIndicator pullDistance={pullDistance} refreshing={refreshing} />
-      <PageHeader title="Live Roadmap" subtitle={format(now, 'EEEE, MMMM d · h:mm a')}>
+      <PageHeader title="Live Roadmap" subtitle={`${format(now, 'EEEE, MMMM d')} · ${fmtTime(now, selectedLocation)}`}>
         <Button variant="outline" size="sm" className="gap-1.5" onClick={invalidateRoadmap}>
           <RefreshCw className="w-4 h-4" /> Refresh
         </Button>

@@ -1,5 +1,6 @@
 ﻿import React from 'react';
 import { formatEndTime } from '@/lib/utils';
+import { fmtTime } from '@/lib/timeFmt';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import usePullToRefresh from '@/hooks/usePullToRefresh';
@@ -141,7 +142,7 @@ export default function Dashboard() {
                       <div>
                         <p className="text-sm font-medium">{format(new Date(shift.startDateTime), 'EEE, MMM d')}</p>
                         <p className="text-xs text-muted-foreground">
-                          {format(new Date(shift.startDateTime), 'h:mm a')} - {formatEndTime(shift.startDateTime, shift.endDateTime)}
+                          {fmtTime(shift.startDateTime, shift.locationId)} - {formatEndTime(shift.startDateTime, shift.endDateTime, shift.locationId)}
                         </p>
                       </div>
                     </Link>
@@ -214,7 +215,7 @@ export default function Dashboard() {
                       <div>
                         <p className="text-sm font-medium">{format(new Date(shift.startDateTime), 'EEE, MMM d')}</p>
                         <p className="text-xs text-muted-foreground">
-                          {format(new Date(shift.startDateTime), 'h:mm a')} - {formatEndTime(shift.startDateTime, shift.endDateTime)}
+                          {fmtTime(shift.startDateTime, shift.locationId)} - {formatEndTime(shift.startDateTime, shift.endDateTime, shift.locationId)}
                         </p>
                       </div>
                     </div>

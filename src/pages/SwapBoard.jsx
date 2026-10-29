@@ -24,10 +24,11 @@ import {
 } from 'lucide-react';
 import { format, formatDistanceToNowStrict } from 'date-fns';
 import { formatEndTime, cn } from '@/lib/utils';
+import { fmtTime } from '@/lib/timeFmt';
 import { toast } from 'sonner';
 
 const intentIcon = { pickup: HandHelping, giveaway: Gift, trade: ArrowLeftRight };
-const fmtShift = (s) => s ? `${format(new Date(s.startDateTime), 'EEE, MMM d · h:mm a')} – ${formatEndTime(s.startDateTime, s.endDateTime)}` : 'shift';
+const fmtShift = (s) => s ? `${format(new Date(s.startDateTime), 'EEE, MMM d')} · ${fmtTime(s.startDateTime, s.locationId)} – ${formatEndTime(s.startDateTime, s.endDateTime, s.locationId)}` : 'shift';
 const friendlyError = (e) => {
   const m = e?.message || '';
   if (/row-level security|policy/i.test(m)) return "You can't do that here";

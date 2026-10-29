@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { formatEndTime, cn } from '@/lib/utils';
+import { fmtTime } from '@/lib/timeFmt';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Card, CardContent } from '@/components/ui/card';
@@ -129,7 +130,7 @@ export default function OpenShifts() {
     if (roleFilter.length && !roleFilter.includes(s.roleId)) return false;
     if (statusFilter.length && !statusFilter.includes(s.status)) return false;
     if (search) {
-      const when = s.startDateTime ? format(new Date(s.startDateTime), 'EEE MMM d h:mm a') : '';
+      const when = s.startDateTime ? `${format(new Date(s.startDateTime), 'EEE MMM d')} ${fmtTime(s.startDateTime, s.locationId)}` : '';
       const hay = `${getRoleName(s.roleId)} ${getLocName(s.locationId)} ${when}`.toLowerCase();
       if (!hay.includes(search.toLowerCase())) return false;
     }
@@ -149,7 +150,7 @@ export default function OpenShifts() {
   const anyNarrowing = activeFilterCount > 0 || !!search;
 
   const whenLabel = (s) => (s.startDateTime
-    ? `${format(new Date(s.startDateTime), 'EEE, MMM d · h:mm a')} – ${s.endDateTime ? formatEndTime(s.startDateTime, s.endDateTime) : ''}`
+    ? `${format(new Date(s.startDateTime), 'EEE, MMM d')} · ${fmtTime(s.startDateTime, s.locationId)} – ${s.endDateTime ? formatEndTime(s.startDateTime, s.endDateTime, s.locationId) : ''}`
     : '');
 
   return (

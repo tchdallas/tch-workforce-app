@@ -18,6 +18,7 @@ import { Globe } from 'lucide-react';
 
 const SETTING_KEYS = [
   { key: 'company_name', label: 'Company Name', type: 'text', tab: 'general', companyOnly: true },
+  { key: 'time_format', label: 'Clock Format', type: 'select', tab: 'general', description: 'How shift and schedule times display — per location or company-wide.', options: [{ value: '12h', label: 'AM/PM (12-hour)' }, { value: '24h', label: 'Military (24-hour)' }] },
   { key: 'default_shift_start', label: 'Default Shift Start', type: 'text', placeholder: 'e.g. 09:00', tab: 'general' },
   { key: 'default_shift_end', label: 'Default Shift End', type: 'text', placeholder: 'e.g. 17:00', tab: 'general' },
   { key: 'shift_swap_approval', label: 'Require Manager Approval for Trades & Giveaways', type: 'swapApproval', tab: 'approvals', description: 'If off, a qualified recipient can accept directly — the shift transfers immediately. This is enforced by the database either way.' },
@@ -166,6 +167,31 @@ export default function Settings() {
                 {h === 0 ? '12 AM (midnight)' : `${h} AM`}
               </option>
             ))}
+          </select>
+        </div>
+      );
+    }
+    if (s.type === 'select') {
+      const current = String(getDraft(s.key) || s.options[0].value);
+      return (
+        <div key={s.key} className="flex items-center justify-between gap-4 py-3 border-b border-border last:border-0">
+          <div>
+            <div className="flex items-center gap-2">
+              <Label className="text-sm">{s.label}</Label>
+              {overridden && <Badge variant="secondary" className="text-[10px]">Location override</Badge>}
+            </div>
+            {s.description && <p className="text-xs text-muted-foreground mt-0.5">{s.description}</p>}
+          </div>
+          <select
+            className="h-8 rounded-md border border-input bg-transparent px-2 text-sm shrink-0"
+            value={current}
+            disabled={scopes.length === 0}
+            onChange={(e) => {
+              setDraft(s.key, e.target.value);
+              saveMutation.mutate({ key: s.key, value: e.target.value });
+            }}
+          >
+            {s.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>
       );

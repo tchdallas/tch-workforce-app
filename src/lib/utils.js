@@ -1,6 +1,7 @@
 import { clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
 import { format } from "date-fns"
+import { timePattern } from "@/lib/timeFmt"
 
 export function cn(...inputs) {
   return twMerge(clsx(inputs))
@@ -11,11 +12,11 @@ export const isIframe = window.self !== window.top;
 
 // 24/7 clarity: end times of shifts that cross midnight get a next-day marker
 // so "11:00 PM – 7:00 AM" can't be misread as the same day.
-export function formatEndTime(start, end) {
+export function formatEndTime(start, end, locationId) {
   const s = new Date(start);
   const e = new Date(end);
   const nextDay = e.getFullYear() !== s.getFullYear() || e.getMonth() !== s.getMonth() || e.getDate() !== s.getDate();
-  return format(e, 'h:mm a') + (nextDay ? ' (+1)' : '');
+  return format(e, timePattern(locationId)) + (nextDay ? ' (+1)' : '');
 }
 
 export function isOvernight(start, end) {

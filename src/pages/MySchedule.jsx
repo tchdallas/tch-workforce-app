@@ -1,5 +1,6 @@
 ﻿import React, { useState } from 'react';
 import { formatEndTime, businessDayOf } from '@/lib/utils';
+import { fmtTime } from '@/lib/timeFmt';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { startOfWeek, endOfWeek, addDays, format } from 'date-fns';
@@ -126,7 +127,7 @@ export default function MySchedule() {
                           {getRoleName(shift.roleId)}
                         </span>
                         <span className="text-muted-foreground text-xs ml-2">
-                          {format(new Date(shift.startDateTime), 'h:mm a')} – {formatEndTime(shift.startDateTime, shift.endDateTime)}
+                          {fmtTime(shift.startDateTime, shift.locationId)} – {formatEndTime(shift.startDateTime, shift.endDateTime, shift.locationId)}
                         </span>
                       </div>
                       <span className="text-[11px] text-muted-foreground shrink-0">{getLocationName(shift.locationId)}</span>
